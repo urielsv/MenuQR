@@ -1,4 +1,4 @@
-# MenuDigital
+# MenuDigital (TP Cloud Computing, VibeCode~~~~)
 
 A multi-tenant digital menu SaaS platform for restaurants. Customers scan a QR code to view menus on their phones, while restaurant owners get rich, real-time analytics.
 
