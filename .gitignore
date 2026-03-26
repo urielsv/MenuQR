@@ -1,0 +1,110 @@
+# =========================
+# Environment & Secrets
+# =========================
+.env
+.env.local
+.env.*.local
+
+# JWT Keys - Keep development keys, ignore production keys
+# The keys in backend/src/main/resources/ are for development only
+# For production, generate new keys and do NOT commit them
+*.pem
+!backend/src/main/resources/privateKey.pem
+!backend/src/main/resources/publicKey.pem
+
+# =========================
+# Java / Maven / Quarkus
+# =========================
+backend/target/
+backend/*.class
+backend/*.jar
+backend/*.war
+backend/*.ear
+backend/*.log
+backend/.quarkus/
+backend/quarkus.log
+
+# Maven
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/mvnw
+backend/mvnw.cmd
+
+# =========================
+# Node.js / Frontend
+# =========================
+node_modules/
+frontend/admin/node_modules/
+frontend/menu/node_modules/
+frontend/admin/dist/
+frontend/menu/dist/
+frontend/admin/.vite/
+frontend/menu/.vite/
+*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# IDE & Editors
+# =========================
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# NetBeans
+nbproject/
+nbbuild/
+dist/
+nbdist/
+
+# =========================
+# OS Generated Files
+# =========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+
+# =========================
+# Testing & Coverage
+# =========================
+coverage/
+*.lcov
+.nyc_output/
+backend/test-output/
+backend/surefire-reports/
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.tmp
+*.temp
+*.swp
+*~
+.cache/
