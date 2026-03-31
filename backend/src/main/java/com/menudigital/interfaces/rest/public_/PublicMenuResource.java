@@ -38,7 +38,7 @@ public class PublicMenuResource {
     }
     
     @Inject
-    org.eclipse.microprofile.rest.client.inject.RestClient
+    @org.eclipse.microprofile.rest.client.inject.RestClient
     com.menudigital.infrastructure.ml.InferenceClient inferenceClient;
 
     @POST
@@ -51,7 +51,9 @@ public class PublicMenuResource {
             return Response.ok(response).build();
         } catch (Exception e) {
             // Regresar lista vacia en caso el motor este caido
-            return Response.ok(new com.menudigital.infrastructure.ml.InferenceClient.RecommendResponse(java.util.Collections.emptyList())).build();
+            var r = new com.menudigital.infrastructure.ml.InferenceClient.RecommendResponse();
+            r.recommended_items = java.util.Collections.emptyList();
+            return Response.ok(r).build();
         }
     }
     
