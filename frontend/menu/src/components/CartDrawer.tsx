@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTheme } from '@/lib/ThemeContext';
 import { useOrder } from '@/lib/OrderContext';
 import { formatCurrency } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { menuApi } from '@/shared/api/menuApi';
+import type { MenuItem } from '@/shared/types';
 
 interface CartDrawerProps {
   qrToken: string;
+  slug?: string;
+  menuItems?: MenuItem[];
   onClose: () => void;
 }
 
@@ -17,9 +22,9 @@ const statusConfig: Record<string, { label: string; color: string; description: 
   DELIVERED: { label: 'Delivered', color: '#6b7280', description: 'Enjoy your meal' },
 };
 
-export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
+export function CartDrawer({ qrToken, slug, menuItems = [], onClose }: CartDrawerProps) {
   const { theme } = useTheme();
-  const { order, updateQuantity, removeItem, submitOrder, isLoading, tableNumber, sessionCode } = useOrder();
+  const { order, updateQuantity, removeItem, addItem, submitOrder, isLoading, tableNumber, sessionCode } = useOrder();
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -35,6 +40,37 @@ export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
   const isOrderSubmitted = order?.status && order.status !== 'DRAFT';
   const statusInfo = statusConfig[order?.status || 'DRAFT'];
 
+  // IDs de los ítems en el carrito
+  const cartItemIds = useMemo(() => {
+    return order?.items.map(i => i.menuItemId) || [];
+  }, [order?.items]);
+
+  // Fetch de recomendaciones de IA
+  const { data: recommendedIds, isLoading: isLoadingRecs } = useQuery({
+    queryKey: ['recommendations', slug, cartItemIds],
+    queryFn: () => menuApi.getRecommendations(slug!, cartItemIds),
+    enabled: !!slug && cartItemIds.length > 0 && !isOrderSubmitted,
+    staleTime: 60000, // 1 min para evitar requests seguidos
+  });
+
+  const recommendations = useMemo(() => {
+    if (!recommendedIds || recommendedIds.length === 0) return [];
+    // Buscar los items recomendados y filtrar los que ya esten en el carrito o que no existan/no esten disponibles
+    return recommendedIds
+      .map(id => menuItems.find(m => m.id === id))
+      .filter((item): item is MenuItem => item !== undefined && item.available !== false && !cartItemIds.includes(item.id))
+      .slice(0, 3); // Maximo 3 sugerencias para UI
+  }, [recommendedIds, menuItems, cartItemIds]);
+
+  const handleAddRecommendation = async (item: MenuItem) => {
+    if (!sessionCode) return;
+    try {
+      await addItem(qrToken, item.id, item.name, item.price, 1);
+    } catch (e) {
+      console.error('Failed to add recommendation:', e);
+    }
+  };
+
   return (
     <div 
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
@@ -42,13 +78,13 @@ export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
     >
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
         aria-hidden="true"
       />
       
       {/* Drawer */}
       <div 
-        className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl"
+        className="relative flex h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl sm:h-auto sm:max-h-[90vh] sm:rounded-3xl"
         style={{ backgroundColor: theme.cardBackground }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -59,7 +95,7 @@ export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
 
         {/* Header */}
         <div 
-          className="border-b px-5 py-4 sm:px-6"
+          className="border-b px-5 py-4 sm:px-6 shrink-0"
           style={{ borderColor: `${theme.textColor}10` }}
         >
           <div className="flex items-center justify-between">
@@ -86,6 +122,16 @@ export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
                 {statusInfo.label}
               </span>
             )}
+            
+            {/* Close Button Mobile */}
+            <button 
+              onClick={onClose}
+              className="sm:hidden p-2 rounded-full text-gray-500 hover:bg-gray-100"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           {/* Status Banner */}
@@ -105,7 +151,7 @@ export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
         </div>
 
         {/* Items */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 pb-24 sm:pb-6">
           {!order?.items.length ? (
             <div className="flex flex-col items-center justify-center py-12">
               <svg 
@@ -216,9 +262,54 @@ export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
             </div>
           )}
 
+          {/* AI Recommendations */}
+          {recommendations.length > 0 && !isOrderSubmitted && (
+             <div className="mt-8 pt-6 border-t" style={{ borderColor: `${theme.textColor}10` }}>
+               <h3 
+                 className="mb-3 text-sm font-bold uppercase tracking-wide flex items-center gap-2"
+                 style={{ color: theme.primaryColor }}
+               >
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                 </svg>
+                 Recomendado para ti
+               </h3>
+               <div className="flex gap-3 overflow-x-auto pb-4 pt-1 snap-x no-scrollbar">
+                 {recommendations.map(rec => (
+                   <div 
+                     key={rec.id} 
+                     className="shrink-0 w-[160px] snap-center rounded-xl p-3 flex flex-col justify-between transition-transform duration-200 hover:-translate-y-1 shadow-sm border border-transparent hover:border-black/5"
+                     style={{ backgroundColor: `${theme.primaryColor}08` }}
+                   >
+                     {rec.imageUrl && (
+                       <div className="w-full h-24 mb-2 rounded-lg overflow-hidden shrink-0 bg-white/50">
+                          <img src={rec.imageUrl} alt={rec.name} className="w-full h-full object-cover mix-blend-multiply" />
+                       </div>
+                     )}
+                     <div className="flex-1 flex flex-col">
+                        <p className="font-semibold text-sm leading-snug line-clamp-2" style={{ color: theme.textColor }}>{rec.name}</p>
+                        <p className="font-bold text-sm mt-1" style={{ color: theme.primaryColor }}>{formatCurrency(rec.price)}</p>
+                     </div>
+                     <button
+                       onClick={() => handleAddRecommendation(rec)}
+                       disabled={isLoading}
+                       className="mt-3 w-full rounded-lg py-2 text-xs font-bold transition-all disabled:opacity-50"
+                       style={{ 
+                         backgroundColor: theme.primaryColor,
+                         color: '#fff',
+                       }}
+                     >
+                       + Agregar
+                     </button>
+                   </div>
+                 ))}
+               </div>
+             </div>
+          )}
+
           {/* Order Notes */}
           {!isOrderSubmitted && order && order.items.length > 0 && (
-            <div className="mt-6">
+            <div className="mt-6 mb-4">
               <label 
                 className="mb-2 block text-xs font-semibold uppercase tracking-wider"
                 style={{ color: `${theme.textColor}60` }}
@@ -230,7 +321,7 @@ export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Any special requests for the kitchen?"
                 rows={2}
-                className="w-full resize-none rounded-xl border-2 px-4 py-3 text-sm outline-none transition-all"
+                className="w-full resize-none rounded-xl border-2 px-4 py-3 text-sm outline-none transition-all focus:border-opacity-100"
                 style={{ 
                   borderColor: `${theme.textColor}15`,
                   backgroundColor: theme.backgroundColor,
@@ -243,7 +334,7 @@ export function CartDrawer({ qrToken, onClose }: CartDrawerProps) {
 
         {/* Footer */}
         <div 
-          className="border-t p-5 sm:p-6"
+          className="border-t p-5 sm:p-6 shrink-0 z-10 bg-inherit"
           style={{ borderColor: `${theme.textColor}10` }}
         >
           {/* Total */}

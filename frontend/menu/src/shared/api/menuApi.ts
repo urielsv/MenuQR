@@ -83,4 +83,12 @@ export const menuApi = {
   recordEvent: async (slug: string, event: RecordEventRequest): Promise<void> => {
     await apiClient.post(`/api/menu/${slug}/events`, event);
   },
+
+  getRecommendations: async (tenantId: string, itemIds: string[]): Promise<string[]> => {
+    const response = await apiClient.post<{recommended_items?: string[]}>(
+      `/api/menu/${tenantId}/recommendations`,
+      { items_in_cart: itemIds }
+    );
+    return response.data.recommended_items || [];
+  },
 };

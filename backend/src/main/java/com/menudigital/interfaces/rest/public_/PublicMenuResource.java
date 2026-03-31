@@ -37,6 +37,24 @@ public class PublicMenuResource {
                 .build());
     }
     
+    @Inject
+    org.eclipse.microprofile.rest.client.inject.RestClient
+    com.menudigital.infrastructure.ml.InferenceClient inferenceClient;
+
+    @POST
+    @Path("/{slug}/recommendations")
+    @Operation(summary = "Get recommendations", description = "Get items recommended by AI based on cart.")
+    public Response getRecommendations(@PathParam("slug") String slug, com.menudigital.infrastructure.ml.InferenceClient.RecommendRequest payload) {
+        payload.tenant_id = slug;
+        try {
+            var response = inferenceClient.predictRecommendations(payload);
+            return Response.ok(response).build();
+        } catch (Exception e) {
+            // Regresar lista vacia en caso el motor este caido
+            return Response.ok(new com.menudigital.infrastructure.ml.InferenceClient.RecommendResponse(java.util.Collections.emptyList())).build();
+        }
+    }
+    
     private MenuResponse toMenuResponse(Menu menu) {
         return new MenuResponse(
             menu.getTenantId() != null ? menu.getTenantId().toString() : null,

@@ -257,6 +257,8 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
       {showCart && (
         <CartDrawer 
           qrToken={qrToken}
+          slug={data.slug}
+          menuItems={data.sections.flatMap(s => s.items)}
           onClose={() => setShowCart(false)} 
         />
       )}
