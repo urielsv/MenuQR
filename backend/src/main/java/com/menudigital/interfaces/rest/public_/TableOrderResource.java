@@ -1,5 +1,6 @@
 package com.menudigital.interfaces.rest.public_;
 
+import com.menudigital.application.order.OrderEventBroadcaster;
 import com.menudigital.domain.menu.Menu;
 import com.menudigital.domain.menu.MenuItem;
 import com.menudigital.domain.menu.MenuItemModifier;
@@ -8,6 +9,7 @@ import com.menudigital.domain.menu.MenuSection;
 import com.menudigital.domain.order.Order;
 import com.menudigital.domain.order.OrderItem;
 import com.menudigital.domain.order.OrderRepository;
+import com.menudigital.domain.order.SelectedModifier;
 import com.menudigital.domain.table.RestaurantTable;
 import com.menudigital.domain.table.TableRepository;
 import com.menudigital.domain.table.TableSession;
@@ -21,8 +23,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.sse.Sse;
+import jakarta.ws.rs.sse.SseEventSink;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
@@ -48,6 +53,9 @@ public class TableOrderResource {
     
     @Inject
     OrderRepository orderRepository;
+    
+    @Inject
+    OrderEventBroadcaster orderEventBroadcaster;
     
     @GET
     @Path("/{qrToken}")
@@ -99,13 +107,13 @@ public class TableOrderResource {
                             .build();
                     }
                     
-                    Optional<Order> draftOrder = orderRepository.findDraftBySessionId(session.getId());
+                    Optional<Order> currentOrder = orderRepository.findCurrentBySessionId(session.getId());
                     
                     return Response.ok(new JoinResponse(
                         session.getId().toString(),
                         session.getSessionCode(),
                         table.getTableNumber(),
-                        draftOrder.map(o -> toOrderResponse(o)).orElse(null)
+                        currentOrder.map(o -> toOrderResponse(o)).orElse(null)
                     )).build();
                 } else {
                     TableSession newSession = TableSession.create(table.getId(), table.getTenantId(), "qr_scan");
@@ -124,7 +132,7 @@ public class TableOrderResource {
     
     @GET
     @Path("/{qrToken}/order")
-    @Operation(summary = "Get current draft order for session")
+    @Operation(summary = "Get current order for session")
     public Response getOrder(
             @PathParam("qrToken") String qrToken,
             @QueryParam("sessionId") UUID sessionId) {
@@ -137,13 +145,45 @@ public class TableOrderResource {
         
         return tableRepository.findByQrToken(qrToken)
             .map(table -> {
-                Optional<Order> order = orderRepository.findDraftBySessionId(sessionId);
+                Optional<Order> order = orderRepository.findCurrentBySessionId(sessionId);
                 return order
                     .map(o -> Response.ok(toOrderResponse(o)).build())
                     .orElse(Response.ok(new OrderResponse(null, table.getTableNumber(), 0, "DRAFT", 
                         "0.00", List.of())).build());
             })
             .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+    
+    @GET
+    @Path("/{qrToken}/order/{orderId}/events")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @Operation(summary = "Subscribe to order status updates via SSE")
+    public void subscribeToOrderUpdates(
+            @PathParam("qrToken") String qrToken,
+            @PathParam("orderId") UUID orderId,
+            @Context SseEventSink eventSink,
+            @Context Sse sse) {
+        
+        orderEventBroadcaster.setSse(sse);
+        
+        orderRepository.findById(orderId).ifPresentOrElse(
+            order -> {
+                var broadcaster = orderEventBroadcaster.getBroadcaster(orderId);
+                broadcaster.register(eventSink);
+                
+                eventSink.send(sse.newEventBuilder()
+                    .name("connected")
+                    .data(String.class, "{\"status\":\"" + order.getStatus().name() + "\"}")
+                    .build());
+            },
+            () -> {
+                eventSink.send(sse.newEventBuilder()
+                    .name("error")
+                    .data(String.class, "{\"error\":\"Order not found\"}")
+                    .build());
+                eventSink.close();
+            }
+        );
     }
     
     @POST
@@ -176,6 +216,22 @@ public class TableOrderResource {
                         .build();
                 }
                 
+                List<MenuItemModifier> selectedModifiers = new java.util.ArrayList<>();
+                BigDecimal modifierTotal = BigDecimal.ZERO;
+                
+                if (request.selectedModifierIds() != null && !request.selectedModifierIds().isEmpty()) {
+                    List<MenuItemModifier> availableModifiers = menuRepository.findModifiersByItemId(menuItem.getId());
+                    for (String modifierId : request.selectedModifierIds()) {
+                        availableModifiers.stream()
+                            .filter(m -> m.getId().toString().equals(modifierId) && m.isAvailable())
+                            .findFirst()
+                            .ifPresent(selectedModifiers::add);
+                    }
+                    modifierTotal = selectedModifiers.stream()
+                        .map(MenuItemModifier::getPriceAdjustment)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                }
+                
                 Order order = orderRepository.findDraftBySessionId(session.getId())
                     .orElseGet(() -> {
                         Order newOrder = Order.create(
@@ -193,12 +249,26 @@ public class TableOrderResource {
                     menuItem.getId(),
                     menuItem.getName(),
                     menuItem.getPrice(),
+                    modifierTotal,
                     request.quantity(),
                     request.notes(),
                     request.guestName()
                 );
                 
                 orderRepository.saveItem(item);
+                
+                if (!selectedModifiers.isEmpty()) {
+                    List<SelectedModifier> modifiersToSave = selectedModifiers.stream()
+                        .map(m -> SelectedModifier.create(
+                            item.getId(),
+                            m.getId(),
+                            m.getName(),
+                            m.getPriceAdjustment(),
+                            m.getModifierType().name()
+                        ))
+                        .toList();
+                    orderRepository.saveItemModifiers(item.getId(), modifiersToSave);
+                }
                 
                 Order updatedOrder = orderRepository.findById(order.getId()).orElse(order);
                 return Response.ok(toOrderResponse(updatedOrder)).build();
@@ -329,6 +399,52 @@ public class TableOrderResource {
             .orElse(Response.status(Response.Status.NOT_FOUND).build());
     }
     
+    @POST
+    @Path("/{qrToken}/order/request-bill")
+    @Transactional
+    @Operation(summary = "Request bill for the order")
+    public Response requestBill(
+            @PathParam("qrToken") String qrToken,
+            @Valid RequestBillRequest request) {
+        
+        return tableRepository.findByQrToken(qrToken)
+            .map(table -> {
+                TableSession session = tableRepository.findActiveSessionByTableId(table.getId())
+                    .filter(s -> s.getId().toString().equals(request.sessionId()))
+                    .orElse(null);
+                
+                if (session == null || !session.isValid()) {
+                    return Response.status(Response.Status.FORBIDDEN)
+                        .entity(new ErrorResponse("INVALID_SESSION", "Invalid or expired session"))
+                        .build();
+                }
+                
+                Order order = orderRepository.findCurrentBySessionId(session.getId()).orElse(null);
+                if (order == null) {
+                    return Response.status(Response.Status.NOT_FOUND)
+                        .entity(new ErrorResponse("NO_ORDER", "No order found"))
+                        .build();
+                }
+                
+                try {
+                    order.requestBill();
+                    orderRepository.update(order);
+                    orderEventBroadcaster.broadcastOrderUpdate(
+                        order.getId(), 
+                        order.getStatus().name(), 
+                        "{\"id\":\"" + order.getId() + "\",\"status\":\"BILL_REQUESTED\",\"orderNumber\":" + order.getOrderNumber() + "}"
+                    );
+                    
+                    return Response.ok(toOrderResponse(order)).build();
+                } catch (IllegalStateException e) {
+                    return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(new ErrorResponse("REQUEST_FAILED", e.getMessage()))
+                        .build();
+                }
+            })
+            .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+    
     private ThemeResponse toThemeResponse(RestaurantTheme theme) {
         return new ThemeResponse(
             theme.primaryColor(),
@@ -392,15 +508,26 @@ public class TableOrderResource {
     }
     
     private OrderItemResponse toOrderItemResponse(OrderItem item) {
+        List<SelectedModifierResponse> modifiers = item.getSelectedModifiers().stream()
+            .map(m -> new SelectedModifierResponse(
+                m.getId().toString(),
+                m.getName(),
+                m.getPriceAdjustment().toPlainString(),
+                m.getModifierType()
+            ))
+            .toList();
+            
         return new OrderItemResponse(
             item.getId().toString(),
             item.getMenuItemId().toString(),
             item.getMenuItemName(),
             item.getQuantity(),
             item.getUnitPrice().toPlainString(),
+            item.getBasePrice() != null ? item.getBasePrice().toPlainString() : item.getUnitPrice().toPlainString(),
             item.getSubtotal().toPlainString(),
             item.getNotes(),
-            item.getAddedBy()
+            item.getAddedBy(),
+            modifiers
         );
     }
     
@@ -423,6 +550,10 @@ public class TableOrderResource {
     public record SubmitOrderRequest(
         @NotBlank String sessionId,
         String notes
+    ) {}
+    
+    public record RequestBillRequest(
+        @NotBlank String sessionId
     ) {}
     
     public record JoinResponse(
@@ -500,9 +631,18 @@ public class TableOrderResource {
         String name,
         int quantity,
         String unitPrice,
+        String basePrice,
         String subtotal,
         String notes,
-        String addedBy
+        String addedBy,
+        List<SelectedModifierResponse> modifiers
+    ) {}
+    
+    public record SelectedModifierResponse(
+        String id,
+        String name,
+        String priceAdjustment,
+        String modifierType
     ) {}
     
     public record ErrorResponse(String code, String message) {}

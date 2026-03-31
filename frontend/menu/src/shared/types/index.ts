@@ -78,12 +78,21 @@ export interface OrderItemResponse {
   name: string;
   quantity: number;
   unitPrice: string;
+  basePrice: string;
   subtotal: string;
   notes: string | null;
   addedBy: string | null;
+  modifiers: SelectedModifierResponse[];
 }
 
-export type OrderStatus = 'DRAFT' | 'SUBMITTED' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'DELIVERED' | 'CANCELLED';
+export interface SelectedModifierResponse {
+  id: string;
+  name: string;
+  priceAdjustment: string;
+  modifierType: string;
+}
+
+export type OrderStatus = 'DRAFT' | 'SUBMITTED' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'DELIVERED' | 'BILL_REQUESTED' | 'CANCELLED';
 
 export type EventType = 'MENU_VIEW' | 'ITEM_VIEW' | 'SECTION_VIEW' | 'FILTER_USED';
 

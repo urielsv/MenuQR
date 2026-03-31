@@ -26,6 +26,9 @@ public class OrderItemEntity extends PanacheEntityBase {
     @Column(name = "unit_price", nullable = false, precision = 10, scale = 2)
     public BigDecimal unitPrice;
     
+    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
+    public BigDecimal basePrice;
+    
     @Column(columnDefinition = "TEXT")
     public String notes;
     

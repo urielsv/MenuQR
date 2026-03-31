@@ -6,14 +6,14 @@ interface ThemeContextValue {
 }
 
 const defaultTheme: Theme = {
-  primaryColor: '#8b5cf6',
-  secondaryColor: '#14b8a6',
-  accentColor: '#f59e0b',
-  backgroundColor: '#ffffff',
-  textColor: '#1f2937',
+  primaryColor: '#374151',
+  secondaryColor: '#6b7280',
+  accentColor: '#9ca3af',
+  backgroundColor: '#f9fafb',
+  textColor: '#111827',
   cardBackground: '#ffffff',
-  gradientStart: '#8b5cf6',
-  gradientEnd: '#6366f1',
+  gradientStart: '#374151',
+  gradientEnd: '#1f2937',
   gradientDirection: 'to-br',
   fontFamily: 'Inter',
   borderRadius: 'lg',

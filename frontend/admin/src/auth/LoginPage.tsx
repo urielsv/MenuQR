@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from '@/hooks/use-toast';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -21,9 +22,11 @@ export function LoginPage() {
 
     try {
       await login({ email, password });
+      toast({ title: 'Welcome back!', description: 'Logged in successfully', variant: 'success' });
       navigate('/admin');
     } catch (err) {
       setError('Invalid email or password');
+      toast({ title: 'Login Failed', description: 'Invalid email or password', variant: 'destructive' });
     } finally {
       setLoading(false);
     }

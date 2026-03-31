@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { orderApi, type Order } from '../shared/api/adminApi';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Clock, ChefHat, Check, XCircle, RefreshCw } from 'lucide-react';
+import { Clock, ChefHat, Check, XCircle, RefreshCw, Receipt } from 'lucide-react';
+import { toast } from '../hooks/use-toast';
 
 const statusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
   DRAFT: { label: 'Draft', color: 'bg-gray-500', icon: Clock },
@@ -13,6 +14,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: typeof 
   PREPARING: { label: 'Preparing', color: 'bg-purple-500', icon: ChefHat },
   READY: { label: 'Ready', color: 'bg-green-500', icon: Check },
   DELIVERED: { label: 'Delivered', color: 'bg-gray-400', icon: Check },
+  BILL_REQUESTED: { label: 'Bill Requested', color: 'bg-orange-500', icon: Receipt },
   CANCELLED: { label: 'Cancelled', color: 'bg-red-500', icon: XCircle },
 };
 
@@ -40,27 +42,47 @@ export function OrdersPage() {
 
   const confirmMutation = useMutation({
     mutationFn: orderApi.confirm,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({ title: 'Order Confirmed', description: `Order #${data.orderNumber} has been confirmed`, variant: 'success' });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to confirm order', variant: 'destructive' }),
   });
 
   const preparingMutation = useMutation({
     mutationFn: orderApi.markPreparing,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({ title: 'Preparing', description: `Order #${data.orderNumber} is now being prepared`, variant: 'success' });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to update order', variant: 'destructive' }),
   });
 
   const readyMutation = useMutation({
     mutationFn: orderApi.markReady,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({ title: 'Ready for Pickup', description: `Order #${data.orderNumber} is ready`, variant: 'success' });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to update order', variant: 'destructive' }),
   });
 
   const deliveredMutation = useMutation({
     mutationFn: orderApi.markDelivered,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({ title: 'Delivered', description: `Order #${data.orderNumber} has been delivered`, variant: 'success' });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to update order', variant: 'destructive' }),
   });
 
   const cancelMutation = useMutation({
     mutationFn: orderApi.cancel,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({ title: 'Order Cancelled', description: `Order #${data.orderNumber} has been cancelled`, variant: 'warning' });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to cancel order', variant: 'destructive' }),
   });
 
   const getNextAction = (order: Order) => {
@@ -85,7 +107,7 @@ export function OrdersPage() {
     return acc;
   }, {} as Record<string, Order[]>);
 
-  const columnOrder = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
+  const columnOrder = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY', 'BILL_REQUESTED'];
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-12">Loading...</div>;
@@ -122,7 +144,7 @@ export function OrdersPage() {
       </div>
 
       {filter === 'active' && orders.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-4">
+        <div className="grid gap-4 lg:grid-cols-5">
           {columnOrder.map((status) => (
             <div key={status} className="space-y-3">
               <div className="flex items-center gap-2">
@@ -215,26 +237,42 @@ function OrderCard({ order, nextAction, onCancel }: OrderCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="space-y-1">
+        <div className="space-y-2">
           {order.items.map((item) => (
-            <div key={item.id} className="flex items-start justify-between text-sm">
-              <div className="flex-1">
-                <span className="font-medium">{item.quantity}x</span>{' '}
-                <span>{item.name}</span>
-                {item.addedBy && (
-                  <span className="ml-1 text-xs text-muted-foreground">
-                    ({item.addedBy})
-                  </span>
-                )}
-                {item.notes && (
-                  <p className="text-xs italic text-muted-foreground">
-                    "{item.notes}"
-                  </p>
-                )}
+            <div key={item.id} className="text-sm">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <span className="font-medium">{item.quantity}x</span>{' '}
+                  <span>{item.name}</span>
+                  {item.addedBy && (
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      ({item.addedBy})
+                    </span>
+                  )}
+                </div>
+                <span className="text-muted-foreground">
+                  {formatCurrency(item.subtotal)}
+                </span>
               </div>
-              <span className="text-muted-foreground">
-                {formatCurrency(item.subtotal)}
-              </span>
+              {item.modifiers && item.modifiers.length > 0 && (
+                <div className="ml-4 mt-0.5 space-y-0.5">
+                  {item.modifiers.map((mod) => (
+                    <p key={mod.id} className="text-xs text-muted-foreground">
+                      + {mod.name}
+                      {parseFloat(mod.priceAdjustment) !== 0 && (
+                        <span className="ml-1 text-primary">
+                          ({parseFloat(mod.priceAdjustment) > 0 ? '+' : ''}{formatCurrency(mod.priceAdjustment)})
+                        </span>
+                      )}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {item.notes && (
+                <p className="ml-4 text-xs italic text-muted-foreground">
+                  "{item.notes}"
+                </p>
+              )}
             </div>
           ))}
         </div>

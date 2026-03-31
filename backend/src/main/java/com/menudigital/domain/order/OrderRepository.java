@@ -14,6 +14,8 @@ public interface OrderRepository {
     
     Optional<Order> findDraftBySessionId(UUID sessionId);
     
+    Optional<Order> findCurrentBySessionId(UUID sessionId);
+    
     List<Order> findByTenantId(TenantId tenantId);
     
     List<Order> findActiveByTenantId(TenantId tenantId);
@@ -24,11 +26,17 @@ public interface OrderRepository {
     
     void saveItem(OrderItem item);
     
+    void saveItemModifiers(UUID orderItemId, List<SelectedModifier> modifiers);
+    
     void updateItem(OrderItem item);
     
     void deleteItem(UUID itemId);
     
     List<OrderItem> findItemsByOrderId(UUID orderId);
     
+    List<SelectedModifier> findModifiersByOrderItemId(UUID orderItemId);
+    
     int getNextOrderNumber(TenantId tenantId);
+    
+    void cancelDraftOrdersBySessionId(UUID sessionId);
 }

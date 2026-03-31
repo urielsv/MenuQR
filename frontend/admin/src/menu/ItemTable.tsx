@@ -8,6 +8,7 @@ import { AvailabilityToggle } from './AvailabilityToggle';
 import { ModifiersForm } from './ModifiersForm';
 import { Pencil, Trash2, UtensilsCrossed, Settings2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
 import type { MenuItem, DietaryTag } from '@/shared/types';
 
 interface ItemTableProps {
@@ -37,7 +38,9 @@ export function ItemTable({ items, onEdit }: ItemTableProps) {
     mutationFn: menuApi.deleteItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu'] });
+      toast({ title: 'Item Deleted', description: 'Menu item has been removed', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to delete item', variant: 'destructive' }),
   });
 
   const handleDelete = (id: string, name: string) => {

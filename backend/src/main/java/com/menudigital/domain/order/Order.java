@@ -155,6 +155,15 @@ public class Order {
         this.updatedAt = Instant.now();
     }
     
+    public void requestBill() {
+        if (this.status != OrderStatus.DELIVERED && this.status != OrderStatus.READY 
+            && this.status != OrderStatus.CONFIRMED && this.status != OrderStatus.PREPARING) {
+            throw new IllegalStateException("Cannot request bill for orders that haven't been confirmed");
+        }
+        this.status = OrderStatus.BILL_REQUESTED;
+        this.updatedAt = Instant.now();
+    }
+    
     public void cancel() {
         if (this.status == OrderStatus.DELIVERED || this.status == OrderStatus.CANCELLED) {
             throw new IllegalStateException("Cannot cancel delivered or already cancelled orders");

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 import type { MenuSection, MenuItem } from '@/shared/types';
 
 export function MenuPage() {
@@ -31,7 +32,9 @@ export function MenuPage() {
       queryClient.invalidateQueries({ queryKey: ['menu'] });
       setNewSectionName('');
       setIsSectionDialogOpen(false);
+      toast({ title: 'Section Created', description: 'New menu section has been added', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to create section', variant: 'destructive' }),
   });
 
   const deleteSectionMutation = useMutation({
@@ -41,7 +44,9 @@ export function MenuPage() {
       if (selectedSection) {
         setSelectedSection(null);
       }
+      toast({ title: 'Section Deleted', description: 'Menu section has been removed', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to delete section', variant: 'destructive' }),
   });
 
   const handleCreateSection = () => {

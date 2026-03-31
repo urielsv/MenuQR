@@ -80,6 +80,17 @@ export const menuApi = {
     return response.data;
   },
 
+  requestBill: async (
+    qrToken: string,
+    sessionId: string
+  ): Promise<OrderResponse> => {
+    const response = await apiClient.post<OrderResponse>(
+      `/api/table/${qrToken}/order/request-bill`,
+      { sessionId }
+    );
+    return response.data;
+  },
+
   recordEvent: async (slug: string, event: RecordEventRequest): Promise<void> => {
     await apiClient.post(`/api/menu/${slug}/events`, event);
   },

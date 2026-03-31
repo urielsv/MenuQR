@@ -66,6 +66,10 @@ public class TableRepositoryImpl implements TableRepository {
             entity.capacity = table.getCapacity();
             entity.qrCodeToken = table.getQrCodeToken();
             entity.isActive = table.isActive();
+            entity.positionX = table.getPositionX();
+            entity.positionY = table.getPositionY();
+            entity.width = table.getWidth();
+            entity.height = table.getHeight();
         }
     }
     
@@ -123,6 +127,35 @@ public class TableRepositoryImpl implements TableRepository {
     }
     
     @Override
+    public Optional<TableSession> findSessionById(UUID sessionId) {
+        TableSessionEntity entity = em.find(TableSessionEntity.class, sessionId);
+        return Optional.ofNullable(entity).map(this::toSessionDomain);
+    }
+    
+    @Override
+    public List<TableSession> findActiveSessionsByTenantId(TenantId tenantId) {
+        return em.createQuery(
+            "SELECT s FROM TableSessionEntity s WHERE s.restaurantId = :rid AND s.isActive = true AND s.expiresAt > :now ORDER BY s.expiresAt",
+            TableSessionEntity.class)
+            .setParameter("rid", tenantId.value())
+            .setParameter("now", Instant.now())
+            .getResultList()
+            .stream()
+            .map(this::toSessionDomain)
+            .toList();
+    }
+    
+    @Override
+    @Transactional
+    public void updateSession(TableSession session) {
+        TableSessionEntity entity = em.find(TableSessionEntity.class, session.getId());
+        if (entity != null) {
+            entity.expiresAt = session.getExpiresAt();
+            entity.isActive = session.isActive();
+        }
+    }
+    
+    @Override
     @Transactional
     public void deactivateSession(UUID sessionId) {
         TableSessionEntity entity = em.find(TableSessionEntity.class, sessionId);
@@ -141,11 +174,15 @@ public class TableRepositoryImpl implements TableRepository {
         entity.qrCodeToken = table.getQrCodeToken();
         entity.isActive = table.isActive();
         entity.createdAt = table.getCreatedAt();
+        entity.positionX = table.getPositionX();
+        entity.positionY = table.getPositionY();
+        entity.width = table.getWidth();
+        entity.height = table.getHeight();
         return entity;
     }
     
     private RestaurantTable toDomain(RestaurantTableEntity entity) {
-        return new RestaurantTable(
+        RestaurantTable table = new RestaurantTable(
             entity.id,
             new TenantId(entity.restaurantId),
             entity.tableNumber,
@@ -155,6 +192,11 @@ public class TableRepositoryImpl implements TableRepository {
             entity.isActive,
             entity.createdAt
         );
+        table.setPositionX(entity.positionX);
+        table.setPositionY(entity.positionY);
+        table.setWidth(entity.width);
+        table.setHeight(entity.height);
+        return table;
     }
     
     private TableSessionEntity toSessionEntity(TableSession session) {
