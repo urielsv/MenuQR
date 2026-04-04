@@ -46,6 +46,14 @@ public class PublicMenuResource {
     @Operation(summary = "Get recommendations", description = "Get items recommended by AI based on cart.")
     public Response getRecommendations(@PathParam("slug") String slug, com.menudigital.infrastructure.ml.InferenceClient.RecommendRequest payload) {
         payload.tenant_id = slug;
+        if (payload.menu_item_ids == null || payload.menu_item_ids.isEmpty()) {
+            getPublicMenuUseCase.execute(slug).ifPresent(menu ->
+                payload.menu_item_ids = menu.getSortedSections().stream()
+                    .flatMap(s -> s.getItems().stream())
+                    .map(item -> item.getId().toString())
+                    .toList()
+            );
+        }
         try {
             var response = inferenceClient.predictRecommendations(payload);
             return Response.ok(response).build();

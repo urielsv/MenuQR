@@ -1,13 +1,15 @@
+import random
+from typing import List, Optional
+
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import List
-import os
 
 app = FastAPI(title="MenuQR Inference Engine")
 
 class RecommendRequest(BaseModel):
-    items_in_cart: List[str]
-    tenant_id: str
+    items_in_cart: List[str] = []
+    tenant_id: str = ""
+    menu_item_ids: Optional[List[str]] = None
 
 class RecommendResponse(BaseModel):
     recommended_items: List[str]
@@ -22,25 +24,13 @@ async def load_model():
 
 @app.post("/predict", response_model=RecommendResponse)
 async def predict_recommendations(req: RecommendRequest):
-    # Mock logic: Return different items depending on what's in the cart
-    # Normally this would be something like: model.predict(req.items_in_cart)
-    # Let's say we have logic that always recommends complimentary items
-    
-    recs = []
-    # Hardcoded fake logic to simulate AI
-    if len(req.items_in_cart) > 0:
-        # Just return some dummy UUIDs representing items, or string keys
-        # The backend should ideally map these back to Database Items
-        recs = [
-            "a3bb189e-8bf9-3888-9912-ace4e6543003", # e.g. Papas
-            "a3bb189e-8bf9-3888-9912-ace4e6543004"  # e.g. Soda
-        ]
-    else:
-        # If cart is empty, recommend the top sellers
-        recs = [
-            "a3bb189e-8bf9-3888-9912-ace4e6543001"
-        ]
-        
+    """Demo: elige hasta 3 ítems al azar del menú que no estén en el carrito."""
+    cart = set(req.items_in_cart or [])
+    candidates = [i for i in (req.menu_item_ids or []) if i and i not in cart]
+    if not candidates:
+        return RecommendResponse(recommended_items=[])
+    k = min(3, len(candidates))
+    recs = random.sample(candidates, k=k)
     return RecommendResponse(recommended_items=recs)
 
 @app.get("/health")

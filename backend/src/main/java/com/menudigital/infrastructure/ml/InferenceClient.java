@@ -16,6 +16,8 @@ public interface InferenceClient {
     class RecommendRequest {
         public List<String> items_in_cart;
         public String tenant_id;
+        /** IDs de ítems disponibles del menú (el mock elige al azar entre estos). */
+        public List<String> menu_item_ids;
     }
 
     class RecommendResponse {

@@ -103,6 +103,8 @@ services:
         condition: service_started
       minio:
         condition: service_healthy
+      inference-engine:
+        condition: service_started
     ports:
       - "8080:8080"
     environment:
@@ -118,6 +120,7 @@ services:
       S3_ENDPOINT: http://minio:9000
       S3_PUBLIC_URL: http://localhost:9000
       QUARKUS_PROFILE: ${QUARKUS_PROFILE:-dev}
+      INFERENCE_API_URL: ${INFERENCE_API_URL:-http://inference-engine:8000}
     volumes:
       - ./backend/src/main/resources/privateKey.pem:/work/privateKey.pem:ro
       - ./backend/src/main/resources/publicKey.pem:/work/publicKey.pem:ro
