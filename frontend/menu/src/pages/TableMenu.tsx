@@ -4,6 +4,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { menuApi } from '@/shared/api/menuApi';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import { OrderProvider, useOrder } from '@/lib/OrderContext';
+import { ToastProvider } from '@/components/Toast';
+import { Header } from '@/components/Header';
 import { MenuSection } from '@/components/MenuSection';
 import { ItemModal } from '@/components/ItemModal';
 import { CartButton } from '@/components/CartButton';
@@ -12,7 +14,7 @@ import { getStoredTableSession, storeTableSession } from '@/lib/utils';
 import type { MenuItem, TableMenuResponse } from '@/shared/types';
 
 function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken: string }) {
-  const { setSession, setOrder, sessionId, addItem, getItemCount } = useOrder();
+  const { setSession, setOrder, sessionId, addItem, getItemCount, subscribeToUpdates } = useOrder();
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [showCart, setShowCart] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -29,6 +31,9 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
       storeTableSession(qrToken, result.sessionId, result.sessionCode);
       if (result.currentOrder) {
         setOrder(result.currentOrder);
+        if (result.currentOrder.status !== 'DRAFT') {
+          setTimeout(() => subscribeToUpdates(qrToken), 100);
+        }
       }
       setIsJoining(false);
     },
@@ -84,9 +89,10 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
     setActiveSection(sectionId);
     const element = document.getElementById(`section-${sectionId}`);
     if (element) {
-      const headerOffset = 140;
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      const header = document.querySelector('header');
+      const headerHeight = header?.getBoundingClientRect().height || 160;
+      const elementPosition = element.getBoundingClientRect().top + window.scrollY;
+      const offsetPosition = elementPosition - headerHeight - 10;
       window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
     }
   };
@@ -113,7 +119,16 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
         fontFamily: `${data.theme.fontFamily}, system-ui, sans-serif`,
       }}
     >
-      {/* Header */}
+      {/* Gradient Header (when showGradientHeader is true) */}
+      {data.theme.showGradientHeader && (
+        <Header 
+          restaurantName={data.restaurantName}
+          tableNumber={data.tableNumber}
+          logoUrl={data.theme.logoUrl}
+        />
+      )}
+
+      {/* Sticky Navigation Header */}
       <header 
         className="sticky top-0 z-50 border-b"
         style={{ 
@@ -121,34 +136,37 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
           borderColor: `${data.theme.textColor}10`,
         }}
       >
-        <div className="mx-auto max-w-3xl px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 
-                className="text-lg font-bold"
-                style={{ color: data.theme.textColor }}
-              >
-                {data.restaurantName}
-              </h1>
-              <p 
-                className="text-sm"
-                style={{ color: `${data.theme.textColor}60` }}
-              >
-                Table {data.tableNumber}
-              </p>
+        {/* Simple header info (when gradient header is not shown) */}
+        {!data.theme.showGradientHeader && (
+          <div className="mx-auto max-w-3xl px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 
+                  className="text-lg font-bold"
+                  style={{ color: data.theme.textColor }}
+                >
+                  {data.restaurantName}
+                </h1>
+                <p 
+                  className="text-sm"
+                  style={{ color: `${data.theme.textColor}60` }}
+                >
+                  Table {data.tableNumber}
+                </p>
+              </div>
+              {data.theme.logoUrl && (
+                <img 
+                  src={data.theme.logoUrl} 
+                  alt={data.restaurantName}
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              )}
             </div>
-            {data.theme.logoUrl && (
-              <img 
-                src={data.theme.logoUrl} 
-                alt={data.restaurantName}
-                className="h-10 w-10 rounded-full object-cover"
-              />
-            )}
           </div>
-        </div>
+        )}
 
         {/* Search Bar */}
-        <div className="mx-auto max-w-3xl px-4 pb-3">
+        <div className="mx-auto max-w-3xl px-4 pb-3 pt-3">
           <div className="relative">
             <svg 
               className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2" 
@@ -174,15 +192,15 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
 
         {/* Category Tabs */}
         {!searchQuery && filteredSections.length > 1 && (
-          <div className="overflow-x-auto scrollbar-hide">
-            <div className="mx-auto flex max-w-3xl gap-1 px-4 pb-2">
+          <div className="scrollbar-hide overflow-x-auto pb-2">
+            <div className="mx-auto flex max-w-3xl gap-1.5 px-4">
               {filteredSections.map((section) => (
                 <button
                   key={section.id}
                   onClick={() => scrollToSection(section.id)}
-                  className="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-all"
+                  className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all"
                   style={{ 
-                    backgroundColor: activeSection === section.id ? data.theme.primaryColor : 'transparent',
+                    backgroundColor: activeSection === section.id ? data.theme.primaryColor : `${data.theme.textColor}08`,
                     color: activeSection === section.id ? '#fff' : `${data.theme.textColor}80`,
                   }}
                 >
@@ -307,9 +325,11 @@ export function TableMenu() {
 
   return (
     <ThemeProvider theme={data.theme}>
-      <OrderProvider>
-        <TableMenuContent data={data} qrToken={qrToken!} />
-      </OrderProvider>
+      <ToastProvider>
+        <OrderProvider>
+          <TableMenuContent data={data} qrToken={qrToken!} />
+        </OrderProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

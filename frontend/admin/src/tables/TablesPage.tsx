@@ -9,7 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { Switch } from '../components/ui/switch';
 import { Badge } from '../components/ui/badge';
-import { QrCode, Plus, RefreshCw, Trash2, Users, Copy, Check, Download, Eye } from 'lucide-react';
+import { QrCode, Plus, RefreshCw, Trash2, Users, Copy, Check, Download, Eye, Clock, Timer, LayoutGrid, List } from 'lucide-react';
+import { toast } from '../hooks/use-toast';
+import { FloorPlanView } from './FloorPlanView';
 
 export function TablesPage() {
   const queryClient = useQueryClient();
@@ -17,6 +19,7 @@ export function TablesPage() {
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [qrTable, setQrTable] = useState<Table | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
   const qrRef = useRef<HTMLDivElement>(null);
 
   const { data: tables = [], isLoading } = useQuery({
@@ -30,7 +33,9 @@ export function TablesPage() {
       queryClient.invalidateQueries({ queryKey: ['tables'] });
       setShowAddDialog(false);
       setQrTable(newTable);
+      toast({ title: 'Table Created', description: `Table ${newTable.number} has been created`, variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to create table', variant: 'destructive' }),
   });
 
   const updateMutation = useMutation({
@@ -39,14 +44,18 @@ export function TablesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tables'] });
       setSelectedTable(null);
+      toast({ title: 'Table Updated', description: 'Table settings have been saved', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to update table', variant: 'destructive' }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: tableApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tables'] });
+      toast({ title: 'Table Deleted', description: 'Table has been removed', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to delete table', variant: 'destructive' }),
   });
 
   const regenerateQrMutation = useMutation({
@@ -54,16 +63,42 @@ export function TablesPage() {
     onSuccess: (updatedTable) => {
       queryClient.invalidateQueries({ queryKey: ['tables'] });
       setQrTable(updatedTable);
+      toast({ title: 'QR Code Regenerated', description: 'New QR code has been generated', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to regenerate QR code', variant: 'destructive' }),
   });
 
   const sessionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'create' | 'end' }) =>
       action === 'create' ? tableApi.createSession(id) : tableApi.endSession(id),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['tables'] });
+      toast({ 
+        title: variables.action === 'create' ? 'Session Started' : 'Session Ended', 
+        description: variables.action === 'create' ? 'New session has been started' : 'Session has been ended',
+        variant: 'success' 
+      });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to manage session', variant: 'destructive' }),
+  });
+
+  const extendSessionMutation = useMutation({
+    mutationFn: ({ id, minutes }: { id: string; minutes: number }) =>
+      tableApi.extendSession(id, minutes),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tables'] });
+      toast({ title: 'Session Extended', description: 'Session has been extended by 1 hour', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to extend session', variant: 'destructive' }),
   });
+
+  const formatRemainingTime = (minutes: number) => {
+    if (minutes <= 0) return 'Expired';
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  };
 
   const getTableUrl = (table: Table) => {
     const menuOrigin = window.location.origin.replace(':5174', ':5173');
@@ -158,12 +193,40 @@ export function TablesPage() {
             Manage your restaurant tables and their QR codes
           </p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Table
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border bg-muted p-1">
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-8"
+              onClick={() => setViewMode('list')}
+            >
+              <List className="mr-2 h-4 w-4" />
+              List
+            </Button>
+            <Button
+              variant={viewMode === 'floor' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-8"
+              onClick={() => setViewMode('floor')}
+            >
+              <LayoutGrid className="mr-2 h-4 w-4" />
+              Floor Plan
+            </Button>
+          </div>
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Table
+          </Button>
+        </div>
       </div>
 
+      {viewMode === 'floor' ? (
+        <FloorPlanView 
+          tables={tables} 
+          onTableClick={(table) => setSelectedTable(table)}
+        />
+      ) : (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tables.map((table) => (
           <Card key={table.id} className={!table.active ? 'opacity-60' : ''}>
@@ -195,6 +258,35 @@ export function TablesPage() {
                 </div>
               </div>
 
+              {/* Session Info */}
+              {table.hasActiveSession && (
+                <div className={`rounded-lg p-3 ${table.sessionRemainingMinutes <= 30 ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Timer className={`h-4 w-4 ${table.sessionRemainingMinutes <= 30 ? 'text-orange-500' : 'text-green-500'}`} />
+                      <span className={`text-sm font-medium ${table.sessionRemainingMinutes <= 30 ? 'text-orange-700' : 'text-green-700'}`}>
+                        {formatRemainingTime(table.sessionRemainingMinutes)} remaining
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => extendSessionMutation.mutate({ id: table.id, minutes: 60 })}
+                      disabled={extendSessionMutation.isPending}
+                    >
+                      <Clock className="mr-1 h-3 w-3" />
+                      +1h
+                    </Button>
+                  </div>
+                  {table.sessionRemainingMinutes <= 30 && (
+                    <p className="mt-1 text-xs text-orange-600">
+                      Session expiring soon - extend or it will reset
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
@@ -219,10 +311,15 @@ export function TablesPage() {
                 <Button
                   size="sm"
                   variant={table.hasActiveSession ? 'destructive' : 'secondary'}
-                  onClick={() => sessionMutation.mutate({
-                    id: table.id,
-                    action: table.hasActiveSession ? 'end' : 'create',
-                  })}
+                  onClick={() => {
+                    if (table.hasActiveSession) {
+                      if (confirm('End this session? Draft orders will be cancelled.')) {
+                        sessionMutation.mutate({ id: table.id, action: 'end' });
+                      }
+                    } else {
+                      sessionMutation.mutate({ id: table.id, action: 'create' });
+                    }
+                  }}
                 >
                   {table.hasActiveSession ? 'End Session' : 'Start Session'}
                 </Button>
@@ -266,8 +363,9 @@ export function TablesPage() {
           </Card>
         ))}
       </div>
+      )}
 
-      {tables.length === 0 && (
+      {viewMode === 'list' && tables.length === 0 && (
         <Card className="py-12 text-center">
           <QrCode className="mx-auto h-12 w-12 text-muted-foreground" />
           <h3 className="mt-4 font-semibold">No tables yet</h3>

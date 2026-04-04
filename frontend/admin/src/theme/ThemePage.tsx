@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Switch } from '../components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Palette, RotateCcw, Save } from 'lucide-react';
+import { toast } from '../hooks/use-toast';
 
 const fontOptions = [
   'Inter',
@@ -59,7 +60,9 @@ export function ThemePage() {
     onSuccess: (data) => {
       queryClient.setQueryData(['theme'], data);
       setLocalTheme(data);
+      toast({ title: 'Theme Saved', description: 'Your changes have been saved', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to save theme', variant: 'destructive' }),
   });
 
   const resetMutation = useMutation({
@@ -67,7 +70,9 @@ export function ThemePage() {
     onSuccess: (data) => {
       queryClient.setQueryData(['theme'], data);
       setLocalTheme(data);
+      toast({ title: 'Theme Reset', description: 'Theme has been reset to defaults', variant: 'success' });
     },
+    onError: () => toast({ title: 'Error', description: 'Failed to reset theme', variant: 'destructive' }),
   });
 
   const handleChange = (key: keyof Theme, value: string | boolean) => {

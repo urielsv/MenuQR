@@ -26,11 +26,11 @@ export function MenuSection({ section, onItemClick, onQuickAdd }: MenuSectionPro
       {/* Items List */}
       <div className="mx-auto max-w-3xl px-4">
         <div 
-          className="overflow-hidden rounded-2xl"
+          className="rounded-2xl"
           style={{ backgroundColor: theme.cardBackground }}
         >
           {section.items.map((item, index) => (
-            <div key={item.id}>
+            <div key={item.id} className="relative">
               {index > 0 && (
                 <div 
                   className="mx-3 border-t"

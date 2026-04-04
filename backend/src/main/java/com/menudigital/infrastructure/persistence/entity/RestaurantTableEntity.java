@@ -33,4 +33,16 @@ public class RestaurantTableEntity extends PanacheEntityBase {
     
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
+    
+    @Column(name = "position_x")
+    public Integer positionX;
+    
+    @Column(name = "position_y")
+    public Integer positionY;
+    
+    @Column(name = "width")
+    public Integer width = 100;
+    
+    @Column(name = "height")
+    public Integer height = 80;
 }

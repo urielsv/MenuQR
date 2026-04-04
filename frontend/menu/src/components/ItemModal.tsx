@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Leaf, Wheat, Milk, Salad } from 'lucide-react';
 import type { MenuItem, Modifier } from '@/shared/types';
 import { useTheme } from '@/lib/ThemeContext';
 import { useOrder } from '@/lib/OrderContext';
@@ -10,11 +11,11 @@ interface ItemModalProps {
   onClose: () => void;
 }
 
-const dietaryInfo: Record<string, { abbr: string; label: string; color: string }> = {
-  VEGAN: { abbr: 'V', label: 'Vegan', color: '#22c55e' },
-  VEGETARIAN: { abbr: 'VG', label: 'Vegetarian', color: '#84cc16' },
-  GLUTEN_FREE: { abbr: 'GF', label: 'Gluten Free', color: '#eab308' },
-  DAIRY_FREE: { abbr: 'DF', label: 'Dairy Free', color: '#06b6d4' },
+const dietaryInfo: Record<string, { label: string; color: string; Icon: typeof Leaf }> = {
+  VEGAN: { label: 'Vegan', color: '#22c55e', Icon: Leaf },
+  VEGETARIAN: { label: 'Vegetarian', color: '#84cc16', Icon: Salad },
+  GLUTEN_FREE: { label: 'Gluten Free', color: '#eab308', Icon: Wheat },
+  DAIRY_FREE: { label: 'Dairy Free', color: '#06b6d4', Icon: Milk },
 };
 
 const modifierTypeLabels: Record<string, string> = {
@@ -96,41 +97,35 @@ export function ItemModal({ item, qrToken, onClose }: ItemModalProps) {
       
       {/* Modal */}
       <div 
-        className="relative w-full max-w-lg overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl"
+        className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl"
         style={{ 
           backgroundColor: theme.cardBackground,
           maxHeight: '90vh',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag indicator for mobile */}
-        <div className="flex justify-center pt-3 sm:hidden">
-          <div className="h-1.5 w-12 rounded-full bg-gray-300" />
+        {/* Drag indicator for mobile - tap to close hint */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div 
+            className="h-1 w-10 rounded-full"
+            style={{ backgroundColor: `${theme.textColor}20` }}
+          />
         </div>
         
         {/* Image */}
         {item.imageUrl && (
-          <div className="relative h-44 w-full sm:h-56">
+          <div className="relative h-44 w-full flex-shrink-0 sm:h-52">
             <img
               src={item.imageUrl}
               alt={item.name}
               className="h-full w-full object-cover"
             />
             <div 
-              className="absolute inset-0"
+              className="pointer-events-none absolute inset-0"
               style={{ 
-                background: `linear-gradient(180deg, transparent 40%, ${theme.cardBackground})`,
+                background: `linear-gradient(180deg, rgba(0,0,0,0) 60%, ${theme.cardBackground})`,
               }}
             />
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-colors hover:bg-black/50"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
         )}
         
@@ -151,17 +146,19 @@ export function ItemModal({ item, qrToken, onClose }: ItemModalProps) {
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {item.dietaryTags.map((tag) => {
                     const info = dietaryInfo[tag];
+                    if (!info) return null;
+                    const IconComponent = info.Icon;
                     return (
                       <span
                         key={tag}
-                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
+                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
                         style={{ 
-                          backgroundColor: `${info?.color}15`,
-                          color: info?.color,
+                          backgroundColor: `${info.color}12`,
+                          color: info.color,
                         }}
                       >
-                        <span className="font-bold">{info?.abbr}</span>
-                        {info?.label}
+                        <IconComponent className="h-3.5 w-3.5" />
+                        {info.label}
                       </span>
                     );
                   })}
@@ -196,7 +193,7 @@ export function ItemModal({ item, qrToken, onClose }: ItemModalProps) {
                   >
                     {modifierTypeLabels[type] || type}
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {modifiers.map((mod) => {
                       const isSelected = selectedModifiers.has(mod.id);
                       const priceNum = parseFloat(mod.priceAdjustment);
@@ -205,18 +202,16 @@ export function ItemModal({ item, qrToken, onClose }: ItemModalProps) {
                           key={mod.id}
                           type="button"
                           onClick={() => toggleModifier(mod.id)}
-                          className="flex w-full items-center justify-between rounded-xl border-2 p-3 text-left transition-all"
+                          className="flex w-full items-center justify-between rounded-xl p-3 text-left transition-all"
                           style={{
-                            borderColor: isSelected ? theme.primaryColor : `${theme.textColor}15`,
-                            backgroundColor: isSelected ? `${theme.primaryColor}08` : 'transparent',
+                            backgroundColor: isSelected ? `${theme.primaryColor}12` : `${theme.textColor}05`,
                           }}
                         >
                           <div className="flex items-center gap-3">
                             <div 
-                              className="flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all"
+                              className="flex h-5 w-5 items-center justify-center rounded-full transition-all"
                               style={{
-                                borderColor: isSelected ? theme.primaryColor : `${theme.textColor}30`,
-                                backgroundColor: isSelected ? theme.primaryColor : 'transparent',
+                                backgroundColor: isSelected ? theme.primaryColor : `${theme.textColor}15`,
                               }}
                             >
                               {isSelected && (

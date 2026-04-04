@@ -9,6 +9,7 @@ import { OrdersPage } from './orders/OrdersPage';
 import { ThemePage } from './theme/ThemePage';
 import { AppShell } from './shared/components/AppShell';
 import { ProtectedRoute } from './shared/components/ProtectedRoute';
+import { Toaster } from './components/ui/toaster';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
+      <Toaster />
     </BrowserRouter>
   );
 }

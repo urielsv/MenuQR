@@ -9,6 +9,32 @@ export interface Table {
   active: boolean;
   activeSessionCode: string | null;
   hasActiveSession: boolean;
+  sessionExpiresAt: string | null;
+  sessionRemainingMinutes: number;
+  positionX: number | null;
+  positionY: number | null;
+  width: number | null;
+  height: number | null;
+}
+
+export interface TablePositionUpdate {
+  id: string;
+  positionX: number | null;
+  positionY: number | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+export interface ActiveSession {
+  sessionId: string;
+  tableId: string;
+  tableNumber: string;
+  tableName: string | null;
+  sessionCode: string;
+  startedAt: string;
+  expiresAt: string;
+  remainingMinutes: number;
+  expiringSoon: boolean;
 }
 
 export interface Order {
@@ -28,9 +54,18 @@ export interface OrderItem {
   name: string;
   quantity: number;
   unitPrice: string;
+  basePrice: string;
   subtotal: string;
   notes: string | null;
   addedBy: string | null;
+  modifiers: OrderItemModifier[];
+}
+
+export interface OrderItemModifier {
+  id: string;
+  name: string;
+  priceAdjustment: string;
+  modifierType: string;
 }
 
 export interface Theme {
@@ -82,6 +117,25 @@ export const tableApi = {
 
   endSession: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/admin/tables/${id}/session`);
+  },
+
+  extendSession: async (id: string, minutes: number): Promise<void> => {
+    await apiClient.post(`/api/admin/tables/${id}/session/extend`, { minutes });
+  },
+
+  listActiveSessions: async (): Promise<ActiveSession[]> => {
+    const response = await apiClient.get<ActiveSession[]>('/api/admin/tables/sessions');
+    return response.data;
+  },
+
+  updatePosition: async (id: string, data: { positionX: number | null; positionY: number | null; width?: number | null; height?: number | null }): Promise<Table> => {
+    const response = await apiClient.put<Table>(`/api/admin/tables/${id}/position`, data);
+    return response.data;
+  },
+
+  updatePositions: async (updates: TablePositionUpdate[]): Promise<Table[]> => {
+    const response = await apiClient.put<Table[]>('/api/admin/tables/positions', updates);
+    return response.data;
   },
 };
 

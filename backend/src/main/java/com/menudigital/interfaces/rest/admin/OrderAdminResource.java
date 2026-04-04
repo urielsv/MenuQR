@@ -1,10 +1,12 @@
 package com.menudigital.interfaces.rest.admin;
 
+import com.menudigital.application.order.OrderEventBroadcaster;
 import com.menudigital.application.shared.TenantContext;
 import com.menudigital.domain.order.Order;
 import com.menudigital.domain.order.OrderItem;
 import com.menudigital.domain.order.OrderRepository;
 import com.menudigital.domain.order.OrderStatus;
+import com.menudigital.domain.order.SelectedModifier;
 import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -31,6 +33,9 @@ public class OrderAdminResource {
     
     @Inject
     TenantContext tenantContext;
+    
+    @Inject
+    OrderEventBroadcaster orderEventBroadcaster;
     
     @GET
     @Operation(summary = "List all active orders")
@@ -74,6 +79,7 @@ public class OrderAdminResource {
                 try {
                     order.confirm();
                     orderRepository.update(order);
+                    broadcastOrderUpdate(order);
                     return Response.ok(toResponse(order)).build();
                 } catch (IllegalStateException e) {
                     return Response.status(Response.Status.BAD_REQUEST)
@@ -95,6 +101,7 @@ public class OrderAdminResource {
                 try {
                     order.startPreparing();
                     orderRepository.update(order);
+                    broadcastOrderUpdate(order);
                     return Response.ok(toResponse(order)).build();
                 } catch (IllegalStateException e) {
                     return Response.status(Response.Status.BAD_REQUEST)
@@ -116,6 +123,7 @@ public class OrderAdminResource {
                 try {
                     order.markReady();
                     orderRepository.update(order);
+                    broadcastOrderUpdate(order);
                     return Response.ok(toResponse(order)).build();
                 } catch (IllegalStateException e) {
                     return Response.status(Response.Status.BAD_REQUEST)
@@ -137,6 +145,7 @@ public class OrderAdminResource {
                 try {
                     order.markDelivered();
                     orderRepository.update(order);
+                    broadcastOrderUpdate(order);
                     return Response.ok(toResponse(order)).build();
                 } catch (IllegalStateException e) {
                     return Response.status(Response.Status.BAD_REQUEST)
@@ -158,6 +167,7 @@ public class OrderAdminResource {
                 try {
                     order.cancel();
                     orderRepository.update(order);
+                    broadcastOrderUpdate(order);
                     return Response.ok(toResponse(order)).build();
                 } catch (IllegalStateException e) {
                     return Response.status(Response.Status.BAD_REQUEST)
@@ -166,6 +176,12 @@ public class OrderAdminResource {
                 }
             })
             .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+    
+    private void broadcastOrderUpdate(Order order) {
+        String data = "{\"id\":\"" + order.getId() + "\",\"status\":\"" + order.getStatus().name() + 
+            "\",\"orderNumber\":" + order.getOrderNumber() + "}";
+        orderEventBroadcaster.broadcastOrderUpdate(order.getId(), order.getStatus().name(), data);
     }
     
     private OrderResponse toResponse(Order order) {
@@ -183,14 +199,25 @@ public class OrderAdminResource {
     }
     
     private OrderItemResponse toItemResponse(OrderItem item) {
+        List<ModifierResponse> modifiers = item.getSelectedModifiers().stream()
+            .map(m -> new ModifierResponse(
+                m.getId().toString(),
+                m.getName(),
+                m.getPriceAdjustment().toPlainString(),
+                m.getModifierType()
+            ))
+            .toList();
+            
         return new OrderItemResponse(
             item.getId().toString(),
             item.getMenuItemName(),
             item.getQuantity(),
             item.getUnitPrice().toPlainString(),
+            item.getBasePrice() != null ? item.getBasePrice().toPlainString() : item.getUnitPrice().toPlainString(),
             item.getSubtotal().toPlainString(),
             item.getNotes(),
-            item.getAddedBy()
+            item.getAddedBy(),
+            modifiers
         );
     }
     
@@ -211,9 +238,18 @@ public class OrderAdminResource {
         String name,
         int quantity,
         String unitPrice,
+        String basePrice,
         String subtotal,
         String notes,
-        String addedBy
+        String addedBy,
+        List<ModifierResponse> modifiers
+    ) {}
+    
+    public record ModifierResponse(
+        String id,
+        String name,
+        String priceAdjustment,
+        String modifierType
     ) {}
     
     public record ErrorResponse(String code, String message) {}

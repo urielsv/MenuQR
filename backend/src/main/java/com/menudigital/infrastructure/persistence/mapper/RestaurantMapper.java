@@ -52,21 +52,22 @@ public class RestaurantMapper {
         if (themeMap == null || themeMap.isEmpty()) {
             return RestaurantTheme.defaultTheme();
         }
+        RestaurantTheme defaults = RestaurantTheme.defaultTheme();
         return new RestaurantTheme(
-            getString(themeMap, "primaryColor", "#8b5cf6"),
-            getString(themeMap, "secondaryColor", "#14b8a6"),
-            getString(themeMap, "accentColor", "#f59e0b"),
-            getString(themeMap, "backgroundColor", "#ffffff"),
-            getString(themeMap, "textColor", "#1f2937"),
-            getString(themeMap, "cardBackground", "#ffffff"),
-            getString(themeMap, "gradientStart", "#8b5cf6"),
-            getString(themeMap, "gradientEnd", "#6366f1"),
-            getString(themeMap, "gradientDirection", "to-br"),
-            getString(themeMap, "fontFamily", "Inter"),
-            getString(themeMap, "borderRadius", "lg"),
-            getString(themeMap, "logoUrl", null),
-            getString(themeMap, "bannerUrl", null),
-            getBoolean(themeMap, "showGradientHeader", true)
+            getString(themeMap, "primaryColor", defaults.primaryColor()),
+            getString(themeMap, "secondaryColor", defaults.secondaryColor()),
+            getString(themeMap, "accentColor", defaults.accentColor()),
+            getString(themeMap, "backgroundColor", defaults.backgroundColor()),
+            getString(themeMap, "textColor", defaults.textColor()),
+            getString(themeMap, "cardBackground", defaults.cardBackground()),
+            getString(themeMap, "gradientStart", defaults.gradientStart()),
+            getString(themeMap, "gradientEnd", defaults.gradientEnd()),
+            getString(themeMap, "gradientDirection", defaults.gradientDirection()),
+            getString(themeMap, "fontFamily", defaults.fontFamily()),
+            getString(themeMap, "borderRadius", defaults.borderRadius()),
+            getString(themeMap, "logoUrl", defaults.logoUrl()),
+            getString(themeMap, "bannerUrl", defaults.bannerUrl()),
+            getBoolean(themeMap, "showGradientHeader", defaults.showGradientHeader())
         );
     }
     

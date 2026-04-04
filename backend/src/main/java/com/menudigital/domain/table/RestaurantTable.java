@@ -15,6 +15,10 @@ public class RestaurantTable {
     private String qrCodeToken;
     private boolean active;
     private Instant createdAt;
+    private Integer positionX;
+    private Integer positionY;
+    private Integer width;
+    private Integer height;
     
     public RestaurantTable() {
     }
@@ -29,6 +33,10 @@ public class RestaurantTable {
         this.qrCodeToken = qrCodeToken;
         this.active = active;
         this.createdAt = createdAt;
+        this.positionX = null;
+        this.positionY = null;
+        this.width = 100;
+        this.height = 80;
     }
     
     public static RestaurantTable create(TenantId tenantId, String tableNumber, String tableName, int capacity) {
@@ -68,4 +76,12 @@ public class RestaurantTable {
     public void setActive(boolean active) { this.active = active; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public Integer getPositionX() { return positionX; }
+    public void setPositionX(Integer positionX) { this.positionX = positionX; }
+    public Integer getPositionY() { return positionY; }
+    public void setPositionY(Integer positionY) { this.positionY = positionY; }
+    public Integer getWidth() { return width; }
+    public void setWidth(Integer width) { this.width = width; }
+    public Integer getHeight() { return height; }
+    public void setHeight(Integer height) { this.height = height; }
 }

@@ -1,6 +1,14 @@
+import { Leaf, Wheat, Milk, Salad } from 'lucide-react';
 import type { MenuItem } from '@/shared/types';
 import { useTheme } from '@/lib/ThemeContext';
 import { formatCurrency } from '@/lib/utils';
+
+const dietaryIcons: Record<string, { Icon: typeof Leaf; color: string }> = {
+  VEGAN: { Icon: Leaf, color: '#22c55e' },
+  VEGETARIAN: { Icon: Salad, color: '#84cc16' },
+  GLUTEN_FREE: { Icon: Wheat, color: '#eab308' },
+  DAIRY_FREE: { Icon: Milk, color: '#06b6d4' },
+};
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -22,14 +30,14 @@ export function MenuItemCard({ item, onClick, onQuickAdd }: MenuItemCardProps) {
       className="group w-full text-left transition-all duration-200 active:scale-[0.98]"
     >
       <div 
-        className="relative flex gap-3 overflow-hidden rounded-xl p-3 transition-all hover:bg-black/[0.02]"
+        className="relative flex gap-3 p-3 transition-all hover:bg-black/[0.02]"
         style={{ backgroundColor: theme.cardBackground }}
       >
         {/* Content */}
-        <div className="flex flex-1 flex-col justify-between min-w-0">
-          <div>
+        <div className="flex flex-1 flex-col justify-between min-w-0 overflow-hidden">
+          <div className="min-w-0">
             <h3 
-              className="font-semibold leading-tight line-clamp-2"
+              className="font-semibold leading-tight truncate pr-1"
               style={{ color: theme.textColor }}
             >
               {item.name}
@@ -45,9 +53,9 @@ export function MenuItemCard({ item, onClick, onQuickAdd }: MenuItemCardProps) {
             )}
           </div>
 
-          <div className="mt-3 flex items-center justify-between">
+          <div className="mt-2 flex items-center gap-2">
             <span 
-              className="text-base font-bold"
+              className="text-base font-bold shrink-0"
               style={{ color: theme.textColor }}
             >
               {formatCurrency(item.price)}
@@ -55,27 +63,30 @@ export function MenuItemCard({ item, onClick, onQuickAdd }: MenuItemCardProps) {
             
             {item.dietaryTags.length > 0 && (
               <div className="flex gap-1">
-                {item.dietaryTags.slice(0, 2).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-md px-1.5 py-0.5 text-[10px] font-medium"
-                    style={{ 
-                      backgroundColor: `${theme.primaryColor}15`,
-                      color: theme.primaryColor,
-                    }}
-                  >
-                    {tag === 'GLUTEN_FREE' ? 'GF' : tag === 'DAIRY_FREE' ? 'DF' : tag.charAt(0)}
-                  </span>
-                ))}
+                {item.dietaryTags.slice(0, 3).map((tag) => {
+                  const info = dietaryIcons[tag];
+                  if (!info) return null;
+                  const IconComponent = info.Icon;
+                  return (
+                    <span
+                      key={tag}
+                      className="flex h-5 w-5 items-center justify-center rounded-full shrink-0"
+                      style={{ backgroundColor: `${info.color}15` }}
+                      title={tag.replace('_', ' ')}
+                    >
+                      <IconComponent className="h-3 w-3" style={{ color: info.color }} />
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
-        {/* Image */}
+        {/* Image + Add Button Container */}
         <div className="relative flex-shrink-0">
           {item.imageUrl ? (
-            <div className="relative h-24 w-24 overflow-hidden rounded-lg">
+            <div className="h-[72px] w-[72px] overflow-hidden rounded-xl">
               <img
                 src={item.imageUrl}
                 alt={item.name}
@@ -84,11 +95,11 @@ export function MenuItemCard({ item, onClick, onQuickAdd }: MenuItemCardProps) {
             </div>
           ) : (
             <div 
-              className="flex h-24 w-24 items-center justify-center rounded-lg"
+              className="flex h-[72px] w-[72px] items-center justify-center rounded-xl"
               style={{ backgroundColor: `${theme.primaryColor}08` }}
             >
               <svg 
-                className="h-8 w-8" 
+                className="h-6 w-6" 
                 fill="none" 
                 stroke={`${theme.textColor}25`} 
                 viewBox="0 0 24 24"
@@ -98,17 +109,18 @@ export function MenuItemCard({ item, onClick, onQuickAdd }: MenuItemCardProps) {
             </div>
           )}
           
-          {/* Quick Add Button */}
+          {/* Quick Add Button - positioned at bottom right corner of image */}
           {onQuickAdd && (
             <button
               onClick={handleQuickAdd}
-              className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full shadow-lg transition-transform active:scale-90"
+              className="absolute -bottom-1 -right-1 z-10 flex h-7 w-7 items-center justify-center rounded-full shadow-lg transition-all active:scale-90"
               style={{ 
                 backgroundColor: theme.primaryColor,
                 color: '#fff',
+                boxShadow: `0 2px 8px ${theme.primaryColor}50`,
               }}
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
             </button>

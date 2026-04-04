@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Receipt } from 'lucide-react';
 import { useTheme } from '@/lib/ThemeContext';
 import { useOrder } from '@/lib/OrderContext';
 import { formatCurrency } from '@/lib/utils';
@@ -19,14 +20,16 @@ const statusConfig: Record<string, { label: string; color: string; description: 
   CONFIRMED: { label: 'Confirmed', color: '#22c55e', description: 'Your order has been confirmed' },
   PREPARING: { label: 'Preparing', color: '#8b5cf6', description: 'Chef is preparing your food' },
   READY: { label: 'Ready', color: '#10b981', description: 'Your order is ready' },
-  DELIVERED: { label: 'Delivered', color: '#6b7280', description: 'Enjoy your meal' },
+  DELIVERED: { label: 'Delivered', color: '#3b82f6', description: 'Enjoy your meal!' },
+  BILL_REQUESTED: { label: 'Bill Requested', color: '#f97316', description: 'Staff will bring your bill shortly' },
 };
 
 export function CartDrawer({ qrToken, slug, menuItems = [], onClose }: CartDrawerProps) {
   const { theme } = useTheme();
-  const { order, updateQuantity, removeItem, addItem, submitOrder, isLoading, tableNumber, sessionCode } = useOrder();
+  const { order, updateQuantity, removeItem, addItem, submitOrder, requestBill, isLoading, tableNumber, sessionCode } = useOrder();
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRequestingBill, setIsRequestingBill] = useState(false);
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -37,7 +40,18 @@ export function CartDrawer({ qrToken, slug, menuItems = [], onClose }: CartDrawe
     }
   };
 
+  const handleRequestBill = async () => {
+    setIsRequestingBill(true);
+    try {
+      await requestBill(qrToken);
+    } finally {
+      setIsRequestingBill(false);
+    }
+  };
+
   const isOrderSubmitted = order?.status && order.status !== 'DRAFT';
+  const canRequestBill = order?.status && ['CONFIRMED', 'PREPARING', 'READY', 'DELIVERED'].includes(order.status);
+  const isBillRequested = order?.status === 'BILL_REQUESTED';
   const statusInfo = statusConfig[order?.status || 'DRAFT'];
 
   // IDs de los ítems en el carrito
@@ -191,6 +205,27 @@ export function CartDrawer({ qrToken, slug, menuItems = [], onClose }: CartDrawe
                       >
                         {item.name}
                       </h3>
+                      {item.modifiers && item.modifiers.length > 0 && (
+                        <div className="mt-1.5 space-y-0.5">
+                          {item.modifiers.map((mod) => (
+                            <p 
+                              key={mod.id}
+                              className="text-xs"
+                              style={{ color: `${theme.textColor}70` }}
+                            >
+                              + {mod.name}
+                              {parseFloat(mod.priceAdjustment) !== 0 && (
+                                <span 
+                                  className="ml-1"
+                                  style={{ color: theme.primaryColor }}
+                                >
+                                  ({parseFloat(mod.priceAdjustment) > 0 ? '+' : ''}{formatCurrency(mod.priceAdjustment)})
+                                </span>
+                              )}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                       {item.addedBy && (
                         <p 
                           className="mt-0.5 text-xs"
@@ -211,12 +246,22 @@ export function CartDrawer({ qrToken, slug, menuItems = [], onClose }: CartDrawe
                         </p>
                       )}
                     </div>
-                    <span 
-                      className="font-bold"
-                      style={{ color: theme.primaryColor }}
-                    >
-                      {formatCurrency(item.subtotal)}
-                    </span>
+                    <div className="text-right">
+                      <span 
+                        className="font-bold"
+                        style={{ color: theme.primaryColor }}
+                      >
+                        {formatCurrency(item.subtotal)}
+                      </span>
+                      {item.quantity > 1 && (
+                        <p 
+                          className="text-xs"
+                          style={{ color: `${theme.textColor}50` }}
+                        >
+                          {item.quantity} × {formatCurrency(item.unitPrice)}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {!isOrderSubmitted && (
@@ -353,18 +398,65 @@ export function CartDrawer({ qrToken, slug, menuItems = [], onClose }: CartDrawe
             </span>
           </div>
 
-          {/* Submit Button */}
-          {isOrderSubmitted ? (
-            <button
-              onClick={onClose}
-              className="w-full rounded-2xl py-4 text-base font-semibold transition-all"
-              style={{ 
-                backgroundColor: `${theme.textColor}08`,
-                color: theme.textColor,
-              }}
-            >
-              Close
-            </button>
+          {/* Action Buttons */}
+          {isBillRequested ? (
+            <div className="space-y-3">
+              <div 
+                className="flex items-center justify-center gap-2 rounded-2xl py-4"
+                style={{ backgroundColor: '#f9731615' }}
+              >
+                <Receipt className="h-5 w-5" style={{ color: '#f97316' }} />
+                <span className="font-semibold" style={{ color: '#f97316' }}>
+                  Bill requested - staff notified
+                </span>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-full rounded-2xl py-3 text-sm font-medium transition-all"
+                style={{ 
+                  backgroundColor: `${theme.textColor}08`,
+                  color: theme.textColor,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          ) : isOrderSubmitted ? (
+            <div className="space-y-3">
+              {canRequestBill && (
+                <button
+                  onClick={handleRequestBill}
+                  disabled={isLoading || isRequestingBill}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold text-white shadow-lg transition-all hover:shadow-xl active:scale-[0.98] disabled:opacity-50"
+                  style={{ 
+                    backgroundColor: '#f97316',
+                    boxShadow: '0 4px 20px rgba(249, 115, 22, 0.4)',
+                  }}
+                >
+                  {isRequestingBill ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Requesting...
+                    </span>
+                  ) : (
+                    <>
+                      <Receipt className="h-5 w-5" />
+                      Request Bill
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="w-full rounded-2xl py-3 text-sm font-medium transition-all"
+                style={{ 
+                  backgroundColor: `${theme.textColor}08`,
+                  color: theme.textColor,
+                }}
+              >
+                Close
+              </button>
+            </div>
           ) : (
             <button
               onClick={handleSubmit}

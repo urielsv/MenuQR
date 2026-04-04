@@ -31,7 +31,7 @@ public record RestaurantTheme(
             "lg",
             null,
             null,
-            false
+            true
         );
     }
 }

@@ -28,5 +28,11 @@ public interface TableRepository {
     
     Optional<TableSession> findSessionByCode(String sessionCode, UUID tableId);
     
+    Optional<TableSession> findSessionById(UUID sessionId);
+    
+    List<TableSession> findActiveSessionsByTenantId(TenantId tenantId);
+    
+    void updateSession(TableSession session);
+    
     void deactivateSession(UUID sessionId);
 }

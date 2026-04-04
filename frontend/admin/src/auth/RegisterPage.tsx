@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from '@/hooks/use-toast';
 
 const MAX_RESTAURANT_NAME_LENGTH = 255;
 const MAX_SLUG_LENGTH = 100;
@@ -87,19 +88,24 @@ export function RegisterPage() {
 
     try {
       await register(formData);
+      toast({ title: 'Welcome!', description: 'Your restaurant has been registered', variant: 'success' });
       navigate('/admin');
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
         const axiosError = err as { response?: { data?: { code?: string } } };
         if (axiosError.response?.data?.code === 'SLUG_EXISTS') {
           setErrors({ slug: 'This URL slug is already taken. Please choose another.' });
+          toast({ title: 'Registration Failed', description: 'This URL slug is already taken', variant: 'destructive' });
         } else if (axiosError.response?.data?.code === 'EMAIL_EXISTS') {
           setErrors({ ownerEmail: 'This email is already registered. Please sign in instead.' });
+          toast({ title: 'Registration Failed', description: 'This email is already registered', variant: 'destructive' });
         } else {
           setErrors({ submit: 'Registration failed. Please try again.' });
+          toast({ title: 'Registration Failed', description: 'Please try again', variant: 'destructive' });
         }
       } else {
         setErrors({ submit: 'Registration failed. Please try again.' });
+        toast({ title: 'Registration Failed', description: 'Please try again', variant: 'destructive' });
       }
     } finally {
       setLoading(false);

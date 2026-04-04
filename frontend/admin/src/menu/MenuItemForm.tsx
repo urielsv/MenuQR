@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Upload } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 import type { MenuItem, MenuSection, DietaryTag, CreateItemRequest } from '@/shared/types';
 
 interface MenuItemFormProps {
@@ -74,9 +75,11 @@ export function MenuItemForm({ open, onClose, item, sections, defaultSectionId }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu'] });
       onClose();
+      toast({ title: 'Item Created', description: 'Menu item has been added', variant: 'success' });
     },
     onError: (error: Error) => {
       setErrors({ submit: error.message || 'Failed to create item' });
+      toast({ title: 'Error', description: error.message || 'Failed to create item', variant: 'destructive' });
     },
   });
 
@@ -86,9 +89,11 @@ export function MenuItemForm({ open, onClose, item, sections, defaultSectionId }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu'] });
       onClose();
+      toast({ title: 'Item Updated', description: 'Menu item has been saved', variant: 'success' });
     },
     onError: (error: Error) => {
       setErrors({ submit: error.message || 'Failed to update item' });
+      toast({ title: 'Error', description: error.message || 'Failed to update item', variant: 'destructive' });
     },
   });
 
