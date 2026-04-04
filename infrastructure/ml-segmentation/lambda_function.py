@@ -127,3 +127,11 @@ def determine_segment_name(avg_events, avg_items):
         return "Decididos / Rápidos"
     else:
         return "Usuarios Regulares"
+
+
+if __name__ == "__main__":
+    import sys
+    result = handler({}, None)
+    body = result.get("body", "")
+    print(body if isinstance(body, str) else json.dumps(result))
+    sys.exit(0 if result.get("statusCode") == 200 else 1)

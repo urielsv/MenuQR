@@ -132,7 +132,7 @@ npm install && npm run dev
 
 ## Production Deployment
 
-See `infrastructure/aws-setup.md` for AWS deployment guide.
+See `infrastructure/aws-deploy-guide.md` for the AWS deployment guide (summary index: `infrastructure/aws-setup.md`).
 
 ### Build backend
 ```bash
