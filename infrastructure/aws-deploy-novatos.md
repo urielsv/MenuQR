@@ -15,7 +15,8 @@ Para detalles técnicos extra, ver también [aws-deploy-guide.md](./aws-deploy-g
 | **EC2** | Una máquina virtual (servidor) donde correrá Docker con tu backend. |
 | **RDS** | Base PostgreSQL gestionada (no instalas tú el motor). |
 | **ALB** | Balanceador que recibe el tráfico de internet y lo reparte a tus EC2. |
-| **S3** | Almacenamiento de archivos (imágenes del menú y archivos del frontend). |
+| **S3** | Almacenamiento: imágenes del menú, SPAs y (recomendado) **otro bucket** solo para modelos ML. |
+| **ASG** | Auto Scaling Group: varias EC2 de API con la misma plantilla; el ALB reparte entre ellas. |
 | **DynamoDB** | Base NoSQL para **eventos de analítica** (vistas del menú, etc.). |
 | **IAM** | Permisos: qué puede hacer cada recurso (ej. la EC2 leyendo S3). |
 
@@ -55,6 +56,15 @@ Objetivo: subredes **públicas** (para el ALB) y **privadas** (para EC2 y RDS), 
 
 Si no quieres pagar NAT al principio, puedes poner la primera EC2 en subred **pública** solo para **pruebas** (menos seguro); esta guía asume **EC2 en privada + NAT** como en [aws-deploy-guide.md](./aws-deploy-guide.md).
 
+### Paso 1b — Endpoints de VPC (opcional pero recomendado)
+
+Para que S3 y DynamoDB no salgan por el **NAT** (ahorro y alineado con arquitectura objetivo):
+
+1. **VPC** → **Endpoints** → crear **Gateway** para `com.amazonaws.us-east-1.s3` y `com.amazonaws.us-east-1.dynamodb` (cambia la región si no es `us-east-1`).
+2. Asocia las **route tables** de tus subredes **privadas**.
+
+Detalle: [aws-deploy-guide.md §3.1](./aws-deploy-guide.md#31-vpc-endpoints-gateway--s3-y-dynamodb).
+
 ---
 
 ## Paso 2 — Security groups (firewalls)
@@ -67,15 +77,20 @@ Crea **tres** security groups en la misma VPC (nombre sugerido entre paréntesis
 - Opcional: **HTTPS 443** cuando tengas certificado.
 - **Outbound:** por defecto (todo).
 
-### 2.2 `sg-ec2` (instancias con Docker)
+### 2.2 `sg-api` (instancias del ASG / API con Docker)
 
 - **Inbound:** puerto **80**, origen el **security group del ALB** (`sg-alb`), no “cualquiera”.
 - **Outbound:** por defecto.
 
 ### 2.3 `sg-rds` (PostgreSQL)
 
-- **Inbound:** tipo **PostgreSQL**, puerto **5432**, origen **sg-ec2** (solo tus servidores de aplicación).
+- **Inbound:** tipo **PostgreSQL**, puerto **5432**, origen **`sg-api`** (solo las instancias de la API).
 - **Outbound:** por defecto.
+
+### 2.4 `sg-etl` (opcional — worker ETL / ML)
+
+- **Inbound:** ninguna desde `0.0.0.0/0`. Para operar: **Session Manager** (IAM) o bastión.
+- **Outbound:** por defecto (NAT para `pip`, etc.).
 
 ---
 
@@ -165,24 +180,26 @@ Anota el **nombre del bucket** → lo usarás en `S3_BUCKET`.
 
 Crea dos buckets (o uno con prefijos) para subir `dist/` de cada frontend después del build.
 
+### 5.3 Bucket de modelos ML (recomendado)
+
+1. Crea otro bucket, ej. `menudigital-models-TU-ACCOUNT-ID` (sin mezclar con imágenes).
+2. El **worker ETL** subirá aquí el artefacto; la **API** solo necesita `GetObject` en la clave que pongas en `RECOMMENDATIONS_MODEL_S3_KEY`.
+
 ---
 
-## Paso 6 — Rol IAM para la EC2 (sin pegar claves en el servidor)
+## Paso 6 — Roles IAM (API y, opcional, ETL)
 
-La aplicación necesita leer/escribir **S3** y **DynamoDB** usando el **rol de la instancia**, no `AWS_ACCESS_KEY_ID` en un `.env` público.
+No uses claves de acceso largas en el `.env` en producción: **Instance profile** por tipo de máquina.
 
-1. **IAM** → **Roles** → **Create role**.
-2. Trusted entity: **AWS service** → **EC2**.
-3. Adjunta una política **inline** o gestionada que permita, como mínimo, en **tus ARNs reales**:
+### 6.1 Rol para el ASG / API (`menudigital-api-ec2`)
 
-   - `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` en `arn:aws:s3:::NOMBRE-BUCKET-IMAGENES/*`
-   - `dynamodb:PutItem`, `dynamodb:Query`, `dynamodb:GetItem` en las tablas `menudigital-events` (e índices) y `menudigital-segments`
+Permite imágenes + DynamoDB + **lectura** del bucket de modelos. Copia el JSON de la guía técnica ([rol API — §8.1](./aws-deploy-guide.md)).
 
-   Puedes copiar el JSON de ejemplo de [aws-deploy-guide.md §8](./aws-deploy-guide.md#8-iam-perfil-de-instancia-ec2) cambiando región, cuenta y nombres de bucket.
+### 6.2 Rol para EC2 ETL/ML (`menudigital-etl-ec2`) — opcional
 
-4. Nombre del rol: ej. `menudigital-ec2-role`.
+Para [ml-segmentation](./ml-segmentation/README.md) y scripts que **suban** el modelo a S3. JSON en la guía técnica ([§8.2](./aws-deploy-guide.md)).
 
-Al lanzar la EC2, asignas este **Instance profile** (el rol).
+Asocia **6.1** al **Launch Template** del ASG (o a la primera EC2 si aún no usás ASG).
 
 ---
 
@@ -218,24 +235,24 @@ Cópialas a la carpeta donde estaré el `docker-compose.prod.yml` en la EC2 (mis
 
 ---
 
-## Paso 9 — Lanzar la EC2
+## Paso 9 — Lanzar la API: una EC2 o Auto Scaling Group
+
+**Objetivo de arquitectura:** **ASG** con la misma plantilla en **2 AZ** (ver [aws-deploy-guide.md](./aws-deploy-guide.md) sección *Imagen del backend, ECR y Auto Scaling Group*).
+
+### Opción A — Primera vez (una sola instancia)
 
 1. **EC2** → **Launch instance**.
-2. AMI: **Amazon Linux 2023**.
-3. Tipo: **t3.small** o similar (mínimo razonable para Docker: nginx + backend).
-4. **Key pair:** créala y descarga el `.pem` (para SSH).
-5. **Network:** tu VPC, subred **privada** (recomendado), **sin** IP pública automática si usas bastión o Systems Manager Session Manager.
-6. **Security group:** **sg-ec2**.
-7. **Advanced** → **IAM instance profile:** el rol del paso 6.
-8. **User data** (opcional, esquema): instalar Docker y Compose, crear carpeta del proyecto, `docker compose pull` y `up`. Muchos equipos prefieren conectar por SSH la primera vez y hacerlo a mano para depurar.
+2. AMI **Amazon Linux 2023**, tipo **t3.small**, **sg-api**, subred **privada**, **IAM** = rol **API** (paso 6.1).
+3. User-data: instalar Docker + Compose + `docker compose up` (como antes).
 
-**Conectar por SSH** (si la EC2 está en subred privada, necesitas **bastion** en subred pública o **Session Manager**):
+### Opción B — Producción (recomendado)
 
-```bash
-ssh -i tu-clave.pem ec2-user@IP_O_DNS
-```
+1. Crea **Launch Template** con lo mismo que la opción A.
+2. **Auto Scaling Groups** → crear grupo: min **1**, max **2**, subredes privadas en **dos AZ**, vinculado al **target group** del ALB (paso 11).
 
-En la instancia, instala Docker ([documentación Amazon Linux 2023](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-getting-started-choose-installation.html#serverless-getting-started-install-docker)) y Docker Compose plugin.
+**Conectar:** Session Manager o bastión si no hay IP pública.
+
+En la instancia: Docker + Compose ([guía Docker AL2023](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-getting-started-choose-installation.html#serverless-getting-started-install-docker)).
 
 ---
 
@@ -254,6 +271,9 @@ AWS_REGION=us-east-1
 S3_BUCKET=menudigital-images-TU-CUENTA
 DYNAMO_TABLE=menudigital-events
 DYNAMO_SEGMENTS_TABLE=menudigital-segments
+# Opcional: bucket solo modelos (recomendado ≠ imágenes)
+# RECOMMENDATIONS_MODEL_S3_BUCKET=menudigital-models-TU-CUENTA
+# RECOMMENDATIONS_MODEL_S3_KEY=recommendations/v1/model.onnx
 S3_PUBLIC_URL=https://TU-BUCKET.s3.us-east-1.amazonaws.com
 ```
 
@@ -278,7 +298,7 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d
 2. Esquema **internet-facing**, VPC y **subredes públicas** (dos AZ).
 3. Security group: **sg-alb**.
 4. **Target group:** tipo **Instance**, protocolo **HTTP**, puerto **80**, health check path **`/q/health`** (nginx reenvía `/q/` al backend).
-5. Registra la(s) instancia(s) EC2 en el target group (puerto **80** donde escucha nginx).
+5. Si usas **una EC2**, regístrala a mano en el target group. Si usas **ASG**, en el grupo elige **Attach to an existing load balancer** y este target group (o asocia el TG al ASG tras crearlo).
 6. Crea el ALB y espera a que los targets pasen a **healthy**.
 
 Prueba en el navegador: `http://DNS-DEL-ALB/q/health`.
@@ -310,9 +330,9 @@ Sube cada `dist/` a su bucket S3 (y si usas website hosting o CloudFront, config
 
 ---
 
-## Paso 14 — Job de segmentación (opcional)
+## Paso 14 — EC2 ETL / ML y segmentación (opcional)
 
-Si quieres segmentos en el panel: en la misma EC2 (o otra), **cron** + Python como en [ml-segmentation/README.md](./ml-segmentation/README.md). Usa las mismas tablas DynamoDB y el rol IAM (o el mismo perfil de instancia).
+Arquitectura objetivo: **instancia dedicada** (no el ASG de la API), `sg-etl`, rol **ETL** (paso 6.2), **cron** + Python como en [ml-segmentation/README.md](./ml-segmentation/README.md). Desde ahí podés subir modelos al bucket de **§5.3** y escribir segmentos en DynamoDB.
 
 ---
 
@@ -323,6 +343,7 @@ Si quieres segmentos en el panel: en la misma EC2 (o otra), **cron** + Python co
 - [ ] Menú público carga y los eventos aparecen en DynamoDB (métricas o “Explore items”).
 - [ ] Subida de imagen crea objeto en S3 y la URL se ve en el menú.
 - [ ] Recomendaciones: con ítems en el carrito, el panel del menú muestra sugerencias (mismo backend).
+- [ ] (Opcional) VPC endpoints S3 + DynamoDB en rutas privadas; worker ETL con cron.
 
 ---
 
@@ -330,8 +351,8 @@ Si quieres segmentos en el panel: en la misma EC2 (o otra), **cron** + Python co
 
 | Síntoma | Qué mirar |
 |---------|-----------|
-| Target **unhealthy** | Security group EC2 permite 80 **desde** el SG del ALB; nginx y backend levantados; health en `/q/health`. |
-| Backend no conecta a RDS | `sg-rds` permite 5432 desde `sg-ec2`; `DB_URL` y credenciales correctas; RDS en subred alcanzable desde la EC2. |
+| Target **unhealthy** | **`sg-api`** permite 80 **desde** `sg-alb`; nginx y backend levantados; health en `/q/health`. |
+| Backend no conecta a RDS | `sg-rds` permite 5432 desde **`sg-api`**; `DB_URL` y credenciales correctas; RDS en subred alcanzable desde la EC2. |
 | Errores S3/Dynamo | Rol IAM adjunto a la instancia; nombres de bucket/tabla; región consistente. |
 | CORS en el navegador | Orígenes permitidos en API (Quarkus ya tiene CORS amplio en dev; revisar prod) y en S3 si aplica. |
 

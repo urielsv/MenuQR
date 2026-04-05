@@ -4,40 +4,55 @@ Si buscas una guía **paso a paso para novatos** (consola, orden de tareas, chec
 
 Esta guía describe cómo desplegar el stack en AWS de forma coherente con el código actual (Quarkus, PostgreSQL, DynamoDB, S3, frontends estáticos). Las sugerencias del carrito se calculan en el mismo Quarkus. Complementa el esquema de tablas en [dynamo-tables.md](./dynamo-tables.md).
 
-## 1. Arquitectura de referencia
+## 1. Arquitectura de referencia (objetivo producción)
+
+Diseño alineado con **multi-AZ**, **API en Auto Scaling Group**, **worker ETL/ML aparte** y **S3 separado para modelos** (el código ya soporta bucket de modelo vía `RECOMMENDATIONS_MODEL_S3_*`).
 
 ```
-Internet
-   │
-   ▼
-Route 53 (opcional) ──► ALB (público, 80/443)
-                           │
-              ┌────────────┴────────────┐
-              ▼                         ▼
-        EC2 AZ-a                    EC2 AZ-b
-        (Docker Compose)            (misma imagen / mismo user-data)
-              │                         │
-              └────────────┬────────────┘
-                           ▼
-              RDS PostgreSQL 15 (Multi-AZ, privado)
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-         DynamoDB      S3 (imágenes)   SPAs en S3 / CloudFront
-         events +      (solo storage)  (solo estáticos)
-         segments
-         
-  Segmentación batch: cron + Python en EC2 (sin Lambda).
+                    Route 53
+                        │
+    ┌───────────────────┼───────────────────┐
+    │                   ▼                   │
+    │   S3 (SPA menú)   │   S3 (SPA admin)  │   … fuera o dentro de VPC según CloudFront
+    └───────────────────┴───────────────────┘
+
+    Internet ──► IGW ──► ALB (subredes públicas, 80/443 + ACM)
+                        │
+            ┌───────────┴───────────┐
+            ▼                       ▼
+     ASG: EC2 API (AZ-a)      ASG: EC2 API (AZ-b)
+     Docker: nginx+Quarkus    (misma Launch Template / user-data)
+            │                       │
+            └───────────┬───────────┘
+                        ▼
+              RDS PostgreSQL 15 Multi-AZ (privado)
+
+     EC2 ETL + ML (privado, típ. una AZ al inicio)
+            │ cron: segmentación + entrenamiento
+            ▼
+     DynamoDB (eventos, segmentos) ◄── Gateway VPC Endpoint
+     S3 imágenes / assets          ◄── Gateway VPC Endpoint
+     S3 modelos ML                 ◄── Gateway VPC Endpoint (mismo tipo; bucket distinto)
+
+Las instancias **API** leen el artefacto de recomendaciones desde **S3 modelos** al arranque (`RecommendationModelLoader`).
 ```
 
-**Qué corre en cada EC2 (recomendado para alinear con `docker-compose.prod.yml`):**
+**Capas:**
 
-- Contenedor **backend** (Quarkus, puerto 8080 interno; incluye API de recomendaciones del menú).
-- Contenedor **nginx** (puerto 80 hacia el ALB; proxy a `/api/` y `/q/`).
+| Capa | Componentes |
+|------|-------------|
+| **Entrada** | Route 53, ALB (HTTPS con ACM), opcional WAF. |
+| **API** | **Auto Scaling Group** (ej. min 1 / deseado 1 / max 2) con **misma** AMI/Launch Template; target group en puerto 80 → nginx → Quarkus. |
+| **Datos transaccionales** | RDS Multi-AZ; security group solo desde SG de las EC2 de API. |
+| **Analítica** | DynamoDB; las API escriben eventos; el worker ETL lee y escribe segmentos. |
+| **Objetos** | **Bucket S3** para imágenes del menú (`S3_BUCKET`); **otro bucket** (recomendado) para **artefactos ML** (`RECOMMENDATIONS_MODEL_S3_*`); buckets para builds de SPA. |
+| **Batch / ML** | **EC2 dedicada** (no en el ASG) para cron de [ml-segmentation](./ml-segmentation/README.md), entrenamiento y `aws s3 cp` del modelo al bucket de modelos. |
 
-Opcionalmente, en la **misma instancia** (o en otra EC2 solo para batch): **cron** que ejecuta el script de segmentación en Python contra DynamoDB ([ml-segmentation/README.md](./ml-segmentation/README.md)); todo el cómputo permanece en EC2.
+**Qué corre en cada instancia del ASG (ver `docker-compose.prod.yml`):**
 
-Los frontends **admin** y **menu** pueden servirse desde **S3 + CloudFront** (o website hosting S3) con `VITE_API_URL` apuntando al dominio del ALB (HTTPS recomendado). S3 aquí es almacenamiento estático, no cómpute.
+- **nginx** (80 hacia el ALB) y **backend** Quarkus (8080 interno; recomendaciones + carga opcional de modelo desde S3).
+
+Los frontends **admin** y **menu** se publican en **S3** (idealmente con **CloudFront**). `VITE_API_URL` apunta al dominio del ALB.
 
 ## 2. Prerrequisitos
 
@@ -58,17 +73,30 @@ Los frontends **admin** y **menu** pueden servirse desde **S3 + CloudFront** (o 
 | Internet Gateway | Adjunto a la VPC; rutas desde subredes públicas |
 | NAT Gateway (recomendado) | En subred pública; rutas `0.0.0.0/0` desde subredes **privadas** hacia NAT para que EC2 descargue imágenes Docker y parches sin IP pública |
 
-**A considerar:** si las instancias EC2 están **solo en subred privada** (recomendado), necesitán NAT o VPC endpoints (ECR, S3, etc.) para `docker pull`.
+**A considerar:** si las instancias EC2 están **solo en subred privada** (recomendado), necesitán **NAT Gateway** para `docker pull` desde internet y/o **VPC endpoints** para reducir tráfico y coste hacia servicios AWS.
+
+### 3.1 VPC endpoints (Gateway) — S3 y DynamoDB
+
+Para que las instancias en **subred privada** hablen con **S3** y **DynamoDB** sin enrutar ese tráfico por el NAT:
+
+1. **VPC** → **Endpoints** → **Create endpoint**.
+2. Tipo **Gateway** para **`com.amazonaws.<region>.s3`** y **`com.amazonaws.<region>.dynamodb`**.
+3. Asocia las **tablas de rutas** de las subredes **privadas** donde están API, ETL y RDS clients (normalmente las mismas rutas que usan las EC2 privadas).
+
+Efecto: `GetObject`/`PutObject` a S3 y llamadas a Dynamo desde el SDK **usan el endpoint** (sin cargo por hora en Gateway; solo datos). El NAT sigue siendo útil para **ECR**, **apt/yum**, **Git**, etc., a menos que añadas **interface endpoints** para ECR (opcional, de pago).
 
 ## 4. Security groups
 
 | SG | Entrada |
 |----|---------|
 | `sg-alb` | `80`, `443` desde `0.0.0.0/0` (restringir admin por IP si aplica) |
-| `sg-ec2` | `80` (o el puerto del target group) **solo** desde `sg-alb` |
-| `sg-rds` | `5432` **solo** desde `sg-ec2` |
+| `sg-api` (antes sg-ec2) | `80` **solo** desde `sg-alb` — lo llevan todas las instancias del **ASG** de la API |
+| `sg-rds` | `5432` **solo** desde `sg-api` |
+| `sg-etl` (worker ETL/ML) | Sin entrada desde internet. Opcional: **SSH** solo desde bastión o usar **SSM** sin abrir 22. Salida por defecto (NAT) para pip/git si hace falta |
 
-No exponer el puerto 8080 de Quarkus directamente a Internet; el ALB debe hablar con nginx (80) o con el puerto que defináis en el target group.
+No exponer el puerto 8080 de Quarkus a Internet; solo el ALB → nginx:80.
+
+**RDS:** si en el futuro el ETL lee PostgreSQL, añade regla en `sg-rds` desde `sg-etl` (puerto 5432).
 
 ## 5. RDS PostgreSQL
 
@@ -105,7 +133,7 @@ En **producción**, no hace falta `DYNAMO_ENDPOINT` ni claves estáticas: el SDK
 
 ## 7. S3
 
-### Bucket de imágenes
+### Bucket de imágenes y assets de aplicación
 
 - Nombre único global, ej. `menudigital-images-<account-id>`.
 - Política de lectura pública **solo en objetos** si el front muestra URLs directas; valorar **CloudFront + OAI** para no abrir el bucket al mundo.
@@ -130,9 +158,17 @@ Variables de build (ej. en CI):
 
 **Recomendación:** servir SPAs detrás de **CloudFront** con HTTPS (certificado ACM en `us-east-1` si usáis CloudFront).
 
-## 8. IAM (perfil de instancia EC2)
+### Bucket de modelos ML (recomendado en producción)
 
-Además de DynamoDB, la aplicación necesita S3 para subida de imágenes:
+- Bucket **dedicado**, ej. `menudigital-models-<account-id>`, para artefactos entrenados (ONNX, etc.).
+- El **worker ETL/ML** sube objetos (`PutObject`); las instancias **API** solo necesitan **`GetObject`** en la clave configurada (`RECOMMENDATIONS_MODEL_S3_KEY`).
+- Así separás IAM (el batch puede escribir modelos; la API no debe poder sobrescribirlos salvo que lo queráis).
+
+## 8. IAM — roles separados (API vs ETL/ML)
+
+### 8.1 Rol para instancias del ASG (`menudigital-api-ec2`)
+
+Incluye imágenes, DynamoDB y **lectura** del modelo:
 
 ```json
 {
@@ -142,6 +178,11 @@ Además de DynamoDB, la aplicación necesita S3 para subida de imágenes:
       "Effect": "Allow",
       "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
       "Resource": "arn:aws:s3:::menudigital-images-<account-id>/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::menudigital-models-<account-id>/*"
     },
     {
       "Effect": "Allow",
@@ -156,9 +197,39 @@ Además de DynamoDB, la aplicación necesita S3 para subida de imágenes:
 }
 ```
 
-Ajustad ARNs y acciones si añadís más tablas o políticas de KMS.
+Añadí **`ecr:GetAuthorizationToken`** y **`ecr:BatchGetImage`** + permisos de capa si tiráis de ECR sin endpoint; o mantened NAT para `docker pull`.
 
-## 9. Imagen del backend e instancias EC2
+### 8.2 Rol para EC2 ETL + ML (`menudigital-etl-ec2`)
+
+Segmentación, entrenamiento y **escritura** de modelos:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::menudigital-models-<account-id>/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["dynamodb:Query", "dynamodb:Scan", "dynamodb:GetItem", "dynamodb:PutItem"],
+      "Resource": [
+        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events",
+        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*",
+        "arn:aws:dynamodb:<region>:<account>:table/menudigital-segments"
+      ]
+    }
+  ]
+}
+```
+
+Si el ETL consulta **RDS**, añadí credenciales vía Secrets Manager y `secretsmanager:GetSecretValue` + conectividad `sg-etl` → `sg-rds`.
+
+Ajustad ARNs y KMS si usáis cifrado en bucket.
+
+## 9. Imagen del backend, ECR y Auto Scaling Group
 
 En un entorno de build (CI o máquina local):
 
@@ -176,13 +247,19 @@ Subir la imagen a **Amazon ECR** y en cada EC2 hacer `docker pull` de ese tag, o
 - `privateKey.pem`, `publicKey.pem` (permisos restrictivos).
 - Archivo `.env` o parámetros inyectados (ver siguiente sección).
 
-**User-data (esquema):**
+**User-data (esquema) — Launch Template del ASG:**
 
 1. Instalar Docker y plugin Compose v2.
 2. Autenticar ECR (`aws ecr get-login-password` …) si usáis registry privado.
 3. `docker compose pull && docker compose up -d`.
 
-**A considerar:** **Auto Scaling Group** con Launch Template, misma AMI o mismo user-data, **mínimo 2** instancias en AZ distintas; salud del target group con **GET** `/q/health` (nginx debe enrutar `/q/` al backend, como en `nginx.conf` del repo).
+**Auto Scaling Group (recomendado en lugar de “2 EC2 fijas”):**
+
+- **Launch Template:** AMI (Amazon Linux 2023), tipo `t3.small`, `sg-api`, subredes **privadas** en **2 AZ**, disco EBS, **IAM instance profile** = rol API.
+- **ASG:** min **1**, deseado **1**, max **2** (o según carga); políticas de escala opcionales (CPU, requests ALB).
+- Adjuntar el ASG al **target group** del ALB; health check **GET** `/q/health`.
+
+**EC2 ETL + ML (fuera del ASG):** misma VPC, subred privada, **rol ETL**, sin registro en el ALB. Desplegar ahí el repo o solo `infrastructure/ml-segmentation` + scripts de entrenamiento; **cron** diario/semanal.
 
 ## 10. Application Load Balancer
 
@@ -202,13 +279,14 @@ Definid al menos (nombres alineados con `application.properties` y `docker-compo
 | `DB_URL` | JDBC a RDS |
 | `DB_USER` / `DB_PASS` | Credenciales RDS |
 | `AWS_REGION` | Región (ej. `us-east-1`) |
-| `S3_BUCKET` | Nombre del bucket de imágenes |
+| `S3_BUCKET` | Bucket de **imágenes** del menú (distinto del de modelos en prod) |
+| `RECOMMENDATIONS_MODEL_S3_BUCKET` | Bucket de **modelos** (puede ser `menudigital-models-…`) |
 | `DYNAMO_TABLE` | Tabla de eventos (ej. `menudigital-events`) |
 | `DYNAMO_SEGMENTS_TABLE` | Tabla de segmentos (si aplica; ver `application.properties`) |
 | *(no definir)* `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Preferir IAM role en EC2 |
 | *(no definir)* `DYNAMO_ENDPOINT`, `S3_ENDPOINT` | Vacío en AWS real (servicio gestionado) |
 | `S3_PUBLIC_URL` | URL pública base para enlazar imágenes (CloudFront o `https://bucket.s3...`) |
-| `RECOMMENDATIONS_MODEL_S3_BUCKET` / `RECOMMENDATIONS_MODEL_S3_KEY` | Opcional: objeto S3 con el artefacto del modelo; se carga al arrancar (inferencia sigue mock hasta integrar motor). El rol EC2 necesita `s3:GetObject` en ese objeto. |
+| `RECOMMENDATIONS_MODEL_S3_KEY` | Clave del objeto (ej. `recommendations/v1/model.onnx`) dentro del bucket de modelos |
 
 **Secretos:** usar **AWS Systems Manager Parameter Store** o **Secrets Manager** y volcar a `.env` en el arranque (systemd unit + `ExecStartPre`), en lugar de dejar contraseñas en texto plano en disco sin cifrar.
 
@@ -243,7 +321,9 @@ El código vive en [ml-segmentation/](./ml-segmentation/). Lee eventos de Dynamo
 
 | Tema | Recomendación |
 |------|----------------|
-| Alta disponibilidad EC2 | Auto Scaling Group, mínimo 2 instancias, health check ALB |
+| Alta disponibilidad API | **ASG** min 1 / max 2 en 2 AZ, health check ALB a `/q/health` |
+| VPC endpoints | Gateway **S3** + **DynamoDB** en rutas de subredes privadas (menos NAT) |
+| Worker batch | **EC2 ETL/ML** aparte del ASG; rol IAM distinto (escribe modelos, lee Dynamo) |
 | Secretos | Parameter Store / Secrets Manager, no contraseñas en git |
 | HTTPS | ACM + ALB (y CloudFront para estáticos) |
 | Imágenes | CloudFront delante de S3, políticas de bucket restrictivas |

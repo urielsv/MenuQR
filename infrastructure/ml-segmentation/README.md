@@ -2,7 +2,7 @@
 
 Este job agrega eventos de DynamoDB (`menudigital-events`), calcula clusters sencillos con scikit-learn y escribe el resultado en `menudigital-segments` para el panel admin.
 
-**No usa AWS Lambda:** el cómputo debe ejecutarse en una instancia **EC2** (la misma que el API o una dedicada a batch), usando el **perfil IAM** de la instancia para llamar a DynamoDB.
+**No usa AWS Lambda:** el cómputo debe ejecutarse en una **EC2 dedicada ETL/ML** (recomendado; arquitectura objetivo en [aws-deploy-guide.md](../aws-deploy-guide.md)), separada del **ASG de la API**, con **rol IAM propio** (`PutObject` en bucket de modelos, `Query`/`PutItem` en DynamoDB, etc.).
 
 ## Requisitos en la instancia
 

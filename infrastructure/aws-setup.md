@@ -5,7 +5,7 @@
 
 ## Arquitectura resumida
 
-ALB → instancias EC2 (Docker: nginx + Quarkus) → **RDS PostgreSQL Multi-AZ** + **DynamoDB** (eventos y segmentos) + **S3** (imágenes y SPAs). El job que rellena segmentos corre en **EC2** (cron + Python), sin Lambda. Route 53 y HTTPS (ACM) recomendados en producción.
+**ALB** → **ASG** (EC2 con Docker: nginx + Quarkus) en **2 AZ** → **RDS Multi-AZ** + **DynamoDB** + **S3** (imágenes, SPAs y **bucket aparte para modelos ML**). **EC2 ETL/ML** dedicada (cron, segmentación, entrenamiento → sube artefactos a S3). **VPC Gateway endpoints** para S3 y DynamoDB en subredes privadas (recomendado). Sin Lambda. Detalle en [aws-deploy-guide.md](./aws-deploy-guide.md) (sección 1).
 
 ## Variables mínimas en el servidor (`.env`)
 

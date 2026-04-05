@@ -43,7 +43,7 @@ menudigital/
 ├── frontend/
 │   ├── admin/                 # Admin panel SPA
 │   └── menu/                  # Public menu viewer SPA
-├── infrastructure/            # AWS setup docs
+├── infrastructure/            # AWS docs (ASG, VPC endpoints, S3 modelos, ETL EC2)
 ├── docker-compose.yml         # Local development
 └── docker-compose.prod.yml    # Production deployment
 ```
