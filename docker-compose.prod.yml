@@ -1,8 +1,6 @@
 services:
   backend:
     image: menudigital-backend:latest
-    depends_on:
-      - inference-engine
     ports:
       - "8080:8080"
     environment:
@@ -13,7 +11,6 @@ services:
       S3_BUCKET: ${S3_BUCKET}
       DYNAMO_TABLE: ${DYNAMO_TABLE}
       DYNAMO_SEGMENTS_TABLE: ${DYNAMO_SEGMENTS_TABLE:-menudigital-segments}
-      INFERENCE_API_URL: ${INFERENCE_API_URL:-http://inference-engine:8000}
     volumes:
       - ./privateKey.pem:/work/privateKey.pem:ro
       - ./publicKey.pem:/work/publicKey.pem:ro
@@ -29,14 +26,4 @@ services:
       - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend
-    restart: unless-stopped
-
-  inference-engine:
-    build:
-      context: ./backend-ml
-      dockerfile: Dockerfile
-    ports:
-      - "127.0.0.1:8000:8000"
-    environment:
-      - WORKERS=2
     restart: unless-stopped

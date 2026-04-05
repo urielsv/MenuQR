@@ -38,31 +38,21 @@ public class PublicMenuResource {
     }
     
     @Inject
-    @org.eclipse.microprofile.rest.client.inject.RestClient
-    com.menudigital.infrastructure.ml.InferenceClient inferenceClient;
+    com.menudigital.application.menu.RecommendMenuItemsUseCase recommendMenuItemsUseCase;
 
     @POST
     @Path("/{slug}/recommendations")
-    @Operation(summary = "Get recommendations", description = "Get items recommended by AI based on cart.")
-    public Response getRecommendations(@PathParam("slug") String slug, com.menudigital.infrastructure.ml.InferenceClient.RecommendRequest payload) {
-        payload.tenant_id = slug;
-        if (payload.menu_item_ids == null || payload.menu_item_ids.isEmpty()) {
-            getPublicMenuUseCase.execute(slug).ifPresent(menu ->
-                payload.menu_item_ids = menu.getSortedSections().stream()
-                    .flatMap(s -> s.getItems().stream())
-                    .map(item -> item.getId().toString())
-                    .toList()
-            );
+    @Operation(summary = "Get recommendations", description = "Sugerencias de ítems del menú (aleatorio entre disponibles fuera del carrito).")
+    public Response getRecommendations(@PathParam("slug") String slug, RecommendationRequestBody body) {
+        if (body == null) {
+            body = new RecommendationRequestBody();
         }
-        try {
-            var response = inferenceClient.predictRecommendations(payload);
-            return Response.ok(response).build();
-        } catch (Exception e) {
-            // Regresar lista vacia en caso el motor este caido
-            var r = new com.menudigital.infrastructure.ml.InferenceClient.RecommendResponse();
-            r.recommended_items = java.util.Collections.emptyList();
-            return Response.ok(r).build();
-        }
+        var recommended = recommendMenuItemsUseCase.execute(
+            slug,
+            body.items_in_cart,
+            body.menu_item_ids
+        );
+        return Response.ok(new RecommendationResponseBody(recommended)).build();
     }
     
     private MenuResponse toMenuResponse(Menu menu) {

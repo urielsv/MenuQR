@@ -2,7 +2,7 @@
 
 Si buscas una guía **paso a paso para novatos** (consola, orden de tareas, checklist), usa **[aws-deploy-novatos.md](./aws-deploy-novatos.md)**.
 
-Esta guía describe cómo desplegar el stack en AWS de forma coherente con el código actual (Quarkus, PostgreSQL, DynamoDB, S3, frontends estáticos, servicio de inferencia opcional). Complementa el esquema de tablas en [dynamo-tables.md](./dynamo-tables.md).
+Esta guía describe cómo desplegar el stack en AWS de forma coherente con el código actual (Quarkus, PostgreSQL, DynamoDB, S3, frontends estáticos). Las sugerencias del carrito se calculan en el mismo Quarkus. Complementa el esquema de tablas en [dynamo-tables.md](./dynamo-tables.md).
 
 ## 1. Arquitectura de referencia
 
@@ -32,9 +32,8 @@ Route 53 (opcional) ──► ALB (público, 80/443)
 
 **Qué corre en cada EC2 (recomendado para alinear con `docker-compose.prod.yml`):**
 
-- Contenedor **backend** (Quarkus, puerto 8080 interno).
+- Contenedor **backend** (Quarkus, puerto 8080 interno; incluye API de recomendaciones del menú).
 - Contenedor **nginx** (puerto 80 hacia el ALB; proxy a `/api/` y `/q/`).
-- Contenedor **inference-engine** (FastAPI, solo red interna; el backend lo llama por HTTP).
 
 Opcionalmente, en la **misma instancia** (o en otra EC2 solo para batch): **cron** que ejecuta el script de segmentación en Python contra DynamoDB ([ml-segmentation/README.md](./ml-segmentation/README.md)); todo el cómputo permanece en EC2.
 
@@ -206,26 +205,18 @@ Definid al menos (nombres alineados con `application.properties` y `docker-compo
 | `S3_BUCKET` | Nombre del bucket de imágenes |
 | `DYNAMO_TABLE` | Tabla de eventos (ej. `menudigital-events`) |
 | `DYNAMO_SEGMENTS_TABLE` | Tabla de segmentos (si aplica; ver `application.properties`) |
-| `INFERENCE_API_URL` | En Compose: `http://inference-engine:8000` |
 | *(no definir)* `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Preferir IAM role en EC2 |
 | *(no definir)* `DYNAMO_ENDPOINT`, `S3_ENDPOINT` | Vacío en AWS real (servicio gestionado) |
 | `S3_PUBLIC_URL` | URL pública base para enlazar imágenes (CloudFront o `https://bucket.s3...`) |
+| `RECOMMENDATIONS_MODEL_S3_BUCKET` / `RECOMMENDATIONS_MODEL_S3_KEY` | Opcional: objeto S3 con el artefacto del modelo; se carga al arrancar (inferencia sigue mock hasta integrar motor). El rol EC2 necesita `s3:GetObject` en ese objeto. |
 
 **Secretos:** usar **AWS Systems Manager Parameter Store** o **Secrets Manager** y volcar a `.env` en el arranque (systemd unit + `ExecStartPre`), en lugar de dejar contraseñas en texto plano en disco sin cifrar.
 
 **JWT:** rotación de claves implica redeploy coordinado; documentar el procedimiento.
 
-## 12. Motor de inferencia (ML)
+## 12. Recomendaciones del menú
 
-El backend llama al cliente REST configurado en `quarkus.rest-client.inference-api.url` (`INFERENCE_API_URL`).
-
-En **docker-compose.prod.yml** del repo, el backend y `inference-engine` comparten red Docker; la URL debe ser **`http://inference-engine:8000`**, no `localhost`.
-
-**Alternativas de arquitectura (siempre cómpute en EC2 u otra máquina virtual, no serverless):**
-
-- **Mismo host (actual):** simple, adecuado para demo y carga baja.
-- **Segunda instancia EC2** solo para inferencia o para jobs batch: mismo VPC, sin balancear tráfico público hacia ella; el backend apunta por IP/DNS interno.
-- **Solo API sin ML:** no levantar `inference-engine` y dejar recomendaciones vacías (el API ya tolera fallos).
+El endpoint `POST /api/menu/{slug}/recommendations` está implementado **dentro de Quarkus** (sugerencias aleatorias entre ítems disponibles fuera del carrito). Opcionalmente puede definirse un objeto en S3 (`RECOMMENDATIONS_MODEL_S3_BUCKET` + `RECOMMENDATIONS_MODEL_S3_KEY`) para **descargar el artefacto al arranque** (p. ej. ONNX); la inferencia real aún no está cableada, pero los bytes quedan listos en `RecommendationModelLoader`.
 
 ## 13. Segmentación batch en EC2 (opcional)
 
@@ -246,7 +237,7 @@ El código vive en [ml-segmentation/](./ml-segmentation/). Lee eventos de Dynamo
 2. Registro y login en admin (JWT).
 3. Menú público: carga y envío de eventos (`POST /api/menu/{slug}/events`) sin errores en DynamoDB (CloudWatch / métricas).
 4. Subida de imagen desde el panel y comprobación en S3 + URL pública.
-5. Carrito con ítems: `POST /api/menu/{slug}/recommendations` responde (si el contenedor de inferencia está arriba).
+5. Carrito con ítems: `POST /api/menu/{slug}/recommendations` devuelve sugerencias desde el mismo backend.
 
 ## 16. Mejoras de arquitectura recomendadas (resumen)
 

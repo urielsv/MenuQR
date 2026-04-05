@@ -5,11 +5,11 @@
 
 ## Arquitectura resumida
 
-ALB → instancias EC2 (Docker: nginx + Quarkus + inferencia opcional) → **RDS PostgreSQL Multi-AZ** + **DynamoDB** (eventos y segmentos) + **S3** (imágenes y SPAs). El job que rellena segmentos corre en **EC2** (cron + Python), sin Lambda. Route 53 y HTTPS (ACM) recomendados en producción.
+ALB → instancias EC2 (Docker: nginx + Quarkus) → **RDS PostgreSQL Multi-AZ** + **DynamoDB** (eventos y segmentos) + **S3** (imágenes y SPAs). El job que rellena segmentos corre en **EC2** (cron + Python), sin Lambda. Route 53 y HTTPS (ACM) recomendados en producción.
 
 ## Variables mínimas en el servidor (`.env`)
 
-Ver la tabla en la guía; incluyen `DB_*`, `AWS_REGION`, `S3_BUCKET`, `DYNAMO_TABLE`, `INFERENCE_API_URL` (en Compose: `http://inference-engine:8000`), y opcionalmente `DYNAMO_SEGMENTS_TABLE`.
+Ver la tabla en la guía; incluyen `DB_*`, `AWS_REGION`, `S3_BUCKET`, `DYNAMO_TABLE`, y opcionalmente `DYNAMO_SEGMENTS_TABLE`. Las recomendaciones del menú van en el mismo backend Quarkus (sin servicio aparte).
 
 ## Coste orientativo
 

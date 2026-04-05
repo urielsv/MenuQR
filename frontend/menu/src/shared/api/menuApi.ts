@@ -95,10 +95,14 @@ export const menuApi = {
     await apiClient.post(`/api/menu/${slug}/events`, event);
   },
 
-  getRecommendations: async (tenantId: string, itemIds: string[]): Promise<string[]> => {
-    const response = await apiClient.post<{recommended_items?: string[]}>(
+  getRecommendations: async (
+    tenantId: string,
+    cartItemIds: string[],
+    menuItemIds: string[]
+  ): Promise<string[]> => {
+    const response = await apiClient.post<{ recommended_items?: string[] }>(
       `/api/menu/${tenantId}/recommendations`,
-      { items_in_cart: itemIds }
+      { items_in_cart: cartItemIds, menu_item_ids: menuItemIds }
     );
     return response.data.recommended_items || [];
   },

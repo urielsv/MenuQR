@@ -59,12 +59,17 @@ export function CartDrawer({ qrToken, slug, menuItems = [], onClose }: CartDrawe
     return order?.items.map(i => i.menuItemId) || [];
   }, [order?.items]);
 
-  // Fetch de recomendaciones de IA
-  const { data: recommendedIds, isLoading: isLoadingRecs } = useQuery({
-    queryKey: ['recommendations', slug, cartItemIds],
-    queryFn: () => menuApi.getRecommendations(slug!, cartItemIds),
-    enabled: !!slug && cartItemIds.length > 0 && !isOrderSubmitted,
-    staleTime: 60000, // 1 min para evitar requests seguidos
+  // IDs candidatos del menú cargado (mismo backend, sin servicio ML aparte)
+  const menuItemIds = useMemo(
+    () => menuItems.filter(m => m.available !== false).map(m => m.id),
+    [menuItems]
+  );
+
+  const { data: recommendedIds } = useQuery({
+    queryKey: ['recommendations', slug, cartItemIds, menuItemIds],
+    queryFn: () => menuApi.getRecommendations(slug!, cartItemIds, menuItemIds),
+    enabled: !!slug && cartItemIds.length > 0 && menuItemIds.length > 0 && !isOrderSubmitted,
+    staleTime: 60000,
   });
 
   const recommendations = useMemo(() => {
@@ -317,7 +322,7 @@ export function CartDrawer({ qrToken, slug, menuItems = [], onClose }: CartDrawe
                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                  </svg>
-                 Recomendado para ti
+                 Sugerencias para ti
                </h3>
                <div className="flex gap-3 overflow-x-auto pb-4 pt-1 snap-x no-scrollbar">
                  {recommendations.map(rec => (
