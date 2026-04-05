@@ -1,5 +1,7 @@
 # Guía de despliegue en AWS (MenuDigital / MenuQR)
 
+Si buscas una guía **paso a paso para novatos** (consola, orden de tareas, checklist), usa **[aws-deploy-novatos.md](./aws-deploy-novatos.md)**.
+
 Esta guía describe cómo desplegar el stack en AWS de forma coherente con el código actual (Quarkus, PostgreSQL, DynamoDB, S3, frontends estáticos, servicio de inferencia opcional). Complementa el esquema de tablas en [dynamo-tables.md](./dynamo-tables.md).
 
 ## 1. Arquitectura de referencia

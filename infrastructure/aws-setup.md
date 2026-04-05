@@ -1,6 +1,7 @@
 # AWS — índice
 
-La **guía detallada de despliegue** (VPC, RDS, DynamoDB, S3, ALB, EC2, IAM, ML, verificación y mejoras recomendadas) está en **[aws-deploy-guide.md](./aws-deploy-guide.md)**.
+- **Principiantes, paso a paso:** **[aws-deploy-novatos.md](./aws-deploy-novatos.md)** (consola + CLI, orden lógico, checklist).
+- **Referencia técnica:** [aws-deploy-guide.md](./aws-deploy-guide.md) (arquitectura, IAM, variables, costes).
 
 ## Arquitectura resumida
 
