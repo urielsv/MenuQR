@@ -27,7 +27,7 @@ EVENTS_TABLE = os.environ.get("EVENTS_TABLE", "menudigital-events")
 
 
 def get_all_tenants() -> list[str]:
-    """Misma lista que lambda_function.py; en prod sustituir por consulta a RDS/API."""
+    """Lista de tenants a entrenar; en prod sustituir por consulta a RDS/API."""
     raw = os.environ.get("TENANT_IDS", "")
     if raw.strip():
         return [t.strip() for t in raw.split(",") if t.strip()]

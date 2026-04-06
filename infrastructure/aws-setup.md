@@ -5,11 +5,11 @@
 
 ## Arquitectura resumida
 
-**ALB** → **ASG** (EC2 con Docker: nginx + Quarkus) en **2 AZ** → **RDS Multi-AZ** + **DynamoDB** + **S3** (imágenes, SPAs y **bucket aparte para modelos ML**). **EC2 ETL/ML** dedicada (cron, segmentación, entrenamiento → sube artefactos a S3). **VPC Gateway endpoints** para S3 y DynamoDB en subredes privadas (recomendado). Sin Lambda. Detalle en [aws-deploy-guide.md](./aws-deploy-guide.md) (sección 1).
+**ALB** → **ASG** (EC2 con Docker: nginx + Quarkus) en **2 AZ** → **RDS Multi-AZ** + **DynamoDB** + **S3** (imágenes, SPAs y **bucket aparte para modelos ML**). **EC2 ETL/ML** dedicada (cron, entrenamiento → sube artefactos a S3). **VPC Gateway endpoints** para S3 y DynamoDB en subredes privadas (recomendado). Sin Lambda. Detalle en [aws-deploy-guide.md](./aws-deploy-guide.md) (sección 1).
 
 ## Variables mínimas en el servidor (`.env`)
 
-Ver la tabla en la guía; incluyen `DB_*`, `AWS_REGION`, `S3_BUCKET`, `DYNAMO_TABLE`, y opcionalmente `DYNAMO_SEGMENTS_TABLE`. Las recomendaciones del menú van en el mismo backend Quarkus (sin servicio aparte).
+Ver la tabla en la guía; incluyen `DB_*`, `AWS_REGION`, `S3_BUCKET`, `DYNAMO_TABLE`. Las recomendaciones del menú van en el mismo backend Quarkus (sin servicio aparte).
 
 ## Coste orientativo
 

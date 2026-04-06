@@ -125,15 +125,3 @@ export interface UpdateModifierRequest {
   available: boolean;
   displayOrder: number;
 }
-
-export interface CustomerSegment {
-  name: string;
-  percentage: number;
-  avgItemsViewed: number;
-  count: number;
-}
-
-export interface CustomerSegmentsResponse {
-  date: string;
-  segments: CustomerSegment[];
-}

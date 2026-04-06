@@ -7,7 +7,6 @@ import { ItemRankingTable } from './ItemRankingTable';
 import { FilterUsageChart } from './FilterUsageChart';
 import { SectionEngagementChart } from './SectionEngagementChart';
 import { RealtimePanel } from './RealtimePanel';
-import { CustomerSegmentsChart } from './CustomerSegmentsChart';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export function AnalyticsPage() {
@@ -69,8 +68,6 @@ export function AnalyticsPage() {
       </div>
 
       <SectionEngagementChart data={analytics.sectionEngagement} />
-
-      <CustomerSegmentsChart />
     </div>
   );
 }

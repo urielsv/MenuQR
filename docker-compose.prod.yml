@@ -10,7 +10,6 @@ services:
       AWS_REGION: ${AWS_REGION}
       S3_BUCKET: ${S3_BUCKET}
       DYNAMO_TABLE: ${DYNAMO_TABLE}
-      DYNAMO_SEGMENTS_TABLE: ${DYNAMO_SEGMENTS_TABLE:-menudigital-segments}
     volumes:
       - ./privateKey.pem:/work/privateKey.pem:ro
       - ./publicKey.pem:/work/publicKey.pem:ro

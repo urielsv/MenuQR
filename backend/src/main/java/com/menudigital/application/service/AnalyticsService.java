@@ -1,7 +1,6 @@
 package com.menudigital.application.service;
 
 import com.menudigital.application.dto.AnalyticsDashboardDTO;
-import com.menudigital.application.dto.CustomerSegmentsDTO;
 import com.menudigital.infrastructure.dynamodb.DynamoDBEventRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -54,32 +53,6 @@ public class AnalyticsService {
         dto.totalMenuViews = totalMenuViews;
         dto.topItems = topItems;
         dto.viewsByHour = hourlyViews;
-        return dto;
-    }
-
-    public CustomerSegmentsDTO getLatestSegments(String tenantId) {
-        List<Map<String, AttributeValue>> items = repository.getLatestSegmentsForTenant(tenantId);
-        CustomerSegmentsDTO dto = new CustomerSegmentsDTO();
-
-        if (items.isEmpty()) {
-            return dto;
-        }
-
-        Map<String, AttributeValue> item = items.get(0);
-        dto.date = item.get("date").s();
-        
-        List<AttributeValue> sList = item.get("segments").l();
-        
-        dto.segments = sList.stream().map(av -> {
-            Map<String, AttributeValue> s = av.m();
-            CustomerSegmentsDTO.Segment seg = new CustomerSegmentsDTO.Segment();
-            seg.name = s.get("name").s();
-            seg.percentage = Double.parseDouble(s.get("percentage").n());
-            seg.count = Integer.parseInt(s.get("count").n());
-            seg.avgItemsViewed = Double.parseDouble(s.get("avgItemsViewed").n());
-            return seg;
-        }).collect(Collectors.toList());
-
         return dto;
     }
 }

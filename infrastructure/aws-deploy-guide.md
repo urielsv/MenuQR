@@ -28,9 +28,9 @@ Diseño alineado con **multi-AZ**, **API en Auto Scaling Group**, **worker ETL/M
               RDS PostgreSQL 15 Multi-AZ (privado)
 
      EC2 ETL + ML (privado, típ. una AZ al inicio)
-            │ cron: segmentación + entrenamiento
+            │ cron: entrenamiento / subida de modelo
             ▼
-     DynamoDB (eventos, segmentos) ◄── Gateway VPC Endpoint
+     DynamoDB (eventos) ◄── Gateway VPC Endpoint
      S3 imágenes / assets          ◄── Gateway VPC Endpoint
      S3 modelos ML                 ◄── Gateway VPC Endpoint (mismo tipo; bucket distinto)
 
@@ -44,9 +44,9 @@ Las instancias **API** leen el artefacto de recomendaciones desde **S3 modelos**
 | **Entrada** | Route 53, ALB (HTTPS con ACM), opcional WAF. |
 | **API** | **Auto Scaling Group** (ej. min 1 / deseado 1 / max 2) con **misma** AMI/Launch Template; target group en puerto 80 → nginx → Quarkus. |
 | **Datos transaccionales** | RDS Multi-AZ; security group solo desde SG de las EC2 de API. |
-| **Analítica** | DynamoDB; las API escriben eventos; el worker ETL lee y escribe segmentos. |
+| **Analítica** | DynamoDB; las API escriben eventos; el worker ETL puede leer eventos para entrenar y subir modelos a S3. |
 | **Objetos** | **Bucket S3** para imágenes del menú (`S3_BUCKET`); **otro bucket** (recomendado) para **artefactos ML** (`RECOMMENDATIONS_MODEL_S3_*`); buckets para builds de SPA. |
-| **Batch / ML** | **EC2 dedicada** (no en el ASG) para cron de [ml-segmentation](./ml-segmentation/README.md), entrenamiento y `aws s3 cp` del modelo al bucket de modelos. |
+| **Batch / ML** | **EC2 dedicada** (no en el ASG) para cron de [entrenamiento](./ml-segmentation/README.md) y subida del artefacto al bucket de modelos. |
 
 **Qué corre en cada instancia del ASG (ver `docker-compose.prod.yml`):**
 
@@ -117,7 +117,6 @@ jdbc:postgresql://<rds-endpoint>:5432/menudigital
 Crear las tablas según [dynamo-tables.md](./dynamo-tables.md):
 
 - `menudigital-events` (PK/SK + GSI `GSI-EventType`, `GSI-Item`).
-- `menudigital-segments` (opcional hasta que ejecutéis el [job batch en EC2](./ml-segmentation/README.md)).
 
 Modo de facturación: **PAY_PER_REQUEST** (on-demand) suele bastar al inicio.
 
@@ -125,7 +124,6 @@ Modo de facturación: **PAY_PER_REQUEST** (on-demand) suele bastar al inicio.
 
 - `arn:aws:dynamodb:<region>:<account>:table/menudigital-events`
 - `arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*`
-- `arn:aws:dynamodb:<region>:<account>:table/menudigital-segments` (si usáis segmentos en el panel)
 
 En **producción**, no hace falta `DYNAMO_ENDPOINT` ni claves estáticas: el SDK usa **IAM instance profile** si `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` no están definidos para S3/Dynamo (el código ya usa `DefaultCredentialsProvider` cuando faltan claves).
 
@@ -189,8 +187,7 @@ Incluye imágenes, DynamoDB y **lectura** del modelo:
       "Action": ["dynamodb:PutItem", "dynamodb:Query", "dynamodb:GetItem"],
       "Resource": [
         "arn:aws:dynamodb:<region>:<account>:table/menudigital-events",
-        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*",
-        "arn:aws:dynamodb:<region>:<account>:table/menudigital-segments"
+        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*"
       ]
     }
   ]
@@ -201,7 +198,7 @@ Añadí **`ecr:GetAuthorizationToken`** y **`ecr:BatchGetImage`** + permisos de 
 
 ### 8.2 Rol para EC2 ETL + ML (`menudigital-etl-ec2`)
 
-Segmentación, entrenamiento y **escritura** de modelos:
+Lectura de eventos en DynamoDB y **escritura** de modelos en S3:
 
 ```json
 {
@@ -217,8 +214,7 @@ Segmentación, entrenamiento y **escritura** de modelos:
       "Action": ["dynamodb:Query", "dynamodb:Scan", "dynamodb:GetItem", "dynamodb:PutItem"],
       "Resource": [
         "arn:aws:dynamodb:<region>:<account>:table/menudigital-events",
-        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*",
-        "arn:aws:dynamodb:<region>:<account>:table/menudigital-segments"
+        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*"
       ]
     }
   ]
@@ -282,7 +278,6 @@ Definid al menos (nombres alineados con `application.properties` y `docker-compo
 | `S3_BUCKET` | Bucket de **imágenes** del menú (distinto del de modelos en prod) |
 | `RECOMMENDATIONS_MODEL_S3_BUCKET` | Bucket de **modelos** (puede ser `menudigital-models-…`) |
 | `DYNAMO_TABLE` | Tabla de eventos (ej. `menudigital-events`) |
-| `DYNAMO_SEGMENTS_TABLE` | Tabla de segmentos (si aplica; ver `application.properties`) |
 | *(no definir)* `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Preferir IAM role en EC2 |
 | *(no definir)* `DYNAMO_ENDPOINT`, `S3_ENDPOINT` | Vacío en AWS real (servicio gestionado) |
 | `S3_PUBLIC_URL` | URL pública base para enlazar imágenes (CloudFront o `https://bucket.s3...`) |
@@ -296,12 +291,12 @@ Definid al menos (nombres alineados con `application.properties` y `docker-compo
 
 El endpoint `POST /api/menu/{slug}/recommendations` está implementado **dentro de Quarkus** (sugerencias aleatorias entre ítems disponibles fuera del carrito). Opcionalmente puede definirse un objeto en S3 (`RECOMMENDATIONS_MODEL_S3_BUCKET` + `RECOMMENDATIONS_MODEL_S3_KEY`) para **descargar el artefacto al arranque** (p. ej. ONNX); la inferencia real aún no está cableada, pero los bytes quedan listos en `RecommendationModelLoader`.
 
-## 13. Segmentación batch en EC2 (opcional)
+## 13. Entrenamiento del modelo en EC2 (opcional)
 
-El código vive en [ml-segmentation/](./ml-segmentation/). Lee eventos de DynamoDB, calcula segmentos y escribe en `menudigital-segments`. El script **`train_upload_model.py`** sube un artefacto de recomendaciones (joblib) al **bucket de modelos** S3; el rol ETL necesita `s3:PutObject` ahí.
+El script **`train_upload_model.py`** en [ml-segmentation/](./ml-segmentation/) lee eventos en DynamoDB y sube un artefacto de recomendaciones (joblib) al **bucket de modelos** S3; el rol ETL necesita `s3:PutObject` ahí.
 
-- Ejecutarlo con **cron** en la instancia EC2 (recomendado: misma cuenta IAM que ya tiene acceso a DynamoDB, sin claves en el script).
-- Instrucciones detalladas: [ml-segmentation/README.md](./ml-segmentation/README.md).
+- Ejecutarlo con **cron** en la instancia EC2 (recomendado: IAM role, sin claves en el script).
+- Instrucciones: [ml-segmentation/README.md](./ml-segmentation/README.md).
 - **No** usar EventBridge ni Lambda para este flujo en el diseño objetivo del proyecto.
 
 ## 14. Route 53 y DNS
@@ -350,4 +345,4 @@ Los importes varían con tráfico y tamaños; son una referencia inicial:
 
 - [aws-setup.md](./aws-setup.md) — índice breve y enlace a esta guía.
 - [dynamo-tables.md](./dynamo-tables.md) — esquema DynamoDB.
-- [ml-segmentation/README.md](./ml-segmentation/README.md) — batch de segmentación en EC2 (cron + Python).
+- [ml-segmentation/README.md](./ml-segmentation/README.md) — entrenamiento y subida del modelo (cron + Python).

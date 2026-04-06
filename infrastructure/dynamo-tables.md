@@ -84,26 +84,3 @@ For a restaurant with:
 **30-day storage**: ~50 MB (assuming ~350 bytes per item)
 
 On-demand pricing estimate: ~$0.50/month for this volume
-
-## Table: menudigital-segments
-Billing: PAY_PER_REQUEST (on-demand)
-
-### Keys
-| Key  | Type   | Pattern                          |
-|------|--------|----------------------------------|
-| PK   | String | TENANT#{tenantId}                |
-| SK   | String | DATE#{yyyy-mm-dd}                |
-
-### Item attributes
-- `PK` (String): Partition key (Tenant ID)
-- `SK` (String): Sort key (Date string)
-- `tenantId` (String): Restaurant tenant ID
-- `date` (String): ISO-date of the segmentation analysis
-- `segments` (List[Map]): List of calculated segments with their stats e.g., `[{"name": "Explorers", "percentage": 40.5, "avgItemsViewed": 12.3}, ...]`
-
-### Query examples
-**Latest segments for tenant:**
-```
-KeyConditionExpression: PK = :pk AND begins_with(SK, "DATE#")
-ScanIndexForward = false (Limit: 1)
-```

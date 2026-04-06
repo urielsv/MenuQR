@@ -2,9 +2,6 @@ package com.menudigital.interfaces.rest.admin;
 
 import com.menudigital.application.analytics.GetMenuAnalyticsUseCase;
 import com.menudigital.application.analytics.GetRealtimeAnalyticsUseCase;
-import com.menudigital.application.dto.CustomerSegmentsDTO;
-import com.menudigital.application.service.AnalyticsService;
-import com.menudigital.application.shared.TenantContext;
 import com.menudigital.domain.analytics.AnalyticsDashboardResponse;
 import com.menudigital.domain.analytics.RealtimeAnalyticsResponse;
 import io.quarkus.security.Authenticated;
@@ -32,12 +29,6 @@ public class AnalyticsResource {
     
     @Inject
     GetRealtimeAnalyticsUseCase getRealtimeAnalyticsUseCase;
-
-    @Inject
-    AnalyticsService analyticsService;
-
-    @Inject
-    TenantContext tenantContext;
     
     @GET
     @Operation(summary = "Get analytics dashboard", description = "Returns full analytics data for the last 30 days")
@@ -56,15 +47,5 @@ public class AnalyticsResource {
     public Response getRealtimeAnalytics() {
         RealtimeAnalyticsResponse response = getRealtimeAnalyticsUseCase.execute();
         return Response.ok(response).build();
-    }
-
-    @GET
-    @Path("/segments")
-    @Operation(summary = "Get customer segments", description = "Latest ML segments for the authenticated restaurant (tenant from JWT)")
-    @APIResponse(responseCode = "200", description = "Segment distribution")
-    @APIResponse(responseCode = "401", description = "Unauthorized")
-    public Response getCustomerSegments() {
-        CustomerSegmentsDTO dto = analyticsService.getLatestSegments(tenantContext.getTenantId().toString());
-        return Response.ok(dto).build();
     }
 }

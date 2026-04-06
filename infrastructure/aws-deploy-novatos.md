@@ -148,21 +148,6 @@ aws dynamodb create-table \
 
 Si la tabla ya existe, el comando fallará; en ese caso puedes ignorar el error.
 
-### 4.2 Tabla `menudigital-segments`
-
-```bash
-aws dynamodb create-table \
-  --table-name menudigital-segments \
-  --billing-mode PAY_PER_REQUEST \
-  --attribute-definitions \
-    AttributeName=PK,AttributeType=S \
-    AttributeName=SK,AttributeType=S \
-  --key-schema \
-    AttributeName=PK,KeyType=HASH \
-    AttributeName=SK,KeyType=RANGE \
-  --region "$AWS_REGION"
-```
-
 ---
 
 ## Paso 5 — S3 (imágenes y, opcional, frontends)
@@ -375,7 +360,6 @@ DB_PASS=LA_CONTRASEÑA_RDS
 AWS_REGION=us-east-1
 S3_BUCKET=menudigital-images-TU-CUENTA
 DYNAMO_TABLE=menudigital-events
-DYNAMO_SEGMENTS_TABLE=menudigital-segments
 # Opcional: bucket solo modelos (recomendado ≠ imágenes)
 # RECOMMENDATIONS_MODEL_S3_BUCKET=menudigital-models-TU-CUENTA
 # RECOMMENDATIONS_MODEL_S3_KEY=recommendations/v1/model.onnx
@@ -437,9 +421,9 @@ Sube cada `dist/` a su bucket S3 (y si usas website hosting o CloudFront, config
 
 ---
 
-## Paso 14 — EC2 ETL / ML y segmentación (opcional)
+## Paso 14 — EC2 ETL / ML (opcional)
 
-Arquitectura objetivo: **instancia dedicada** (no el ASG de la API), `sg-etl`, rol **ETL** (paso 6.2), **cron** + Python como en [ml-segmentation/README.md](./ml-segmentation/README.md). Desde ahí podés subir modelos al bucket de **§5.3** y escribir segmentos en DynamoDB.
+Arquitectura objetivo: **instancia dedicada** (no el ASG de la API), `sg-etl`, rol **ETL** (paso 6.2), **cron** + Python como en [ml-segmentation/README.md](./ml-segmentation/README.md) para entrenar y subir el artefacto al bucket de **§5.3**.
 
 ---
 
