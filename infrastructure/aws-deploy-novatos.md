@@ -239,18 +239,123 @@ Cópialas a la carpeta donde estaré el `docker-compose.prod.yml` en la EC2 (mis
 
 **Objetivo de arquitectura:** **ASG** con la misma plantilla en **2 AZ** (ver [aws-deploy-guide.md](./aws-deploy-guide.md) sección *Imagen del backend, ECR y Auto Scaling Group*).
 
+### Orden si vas a usar ASG + ALB
+
+1. Crea primero el **Target Group** del [Paso 11](#paso-11--application-load-balancer) (VPC, puerto **80**, health **`/q/health`**), **sin** registrar instancias manualmente.
+2. Crea **Launch Template** y luego el **ASG** enlazado a ese Target Group (pasos abajo).
+3. Crea el **ALB** y el **listener** (HTTP/HTTPS) que envíe tráfico a **ese mismo** Target Group.
+
+Así las nuevas instancias del ASG se registran solas en el TG y el balanceador las enruta cuando esté listo.
+
 ### Opción A — Primera vez (una sola instancia)
 
 1. **EC2** → **Launch instance**.
 2. AMI **Amazon Linux 2023**, tipo **t3.small**, **sg-api**, subred **privada**, **IAM** = rol **API** (paso 6.1).
 3. User-data: instalar Docker + Compose + `docker compose up` (como antes).
 
-### Opción B — Producción (recomendado)
+### Opción B — Producción (resumen)
 
-1. Crea **Launch Template** con lo mismo que la opción A.
-2. **Auto Scaling Groups** → crear grupo: min **1**, max **2**, subredes privadas en **dos AZ**, vinculado al **target group** del ALB (paso 11).
+- **Launch Template** = misma AMI, tipo, SG, IAM y user-data que la opción A.
+- **ASG** = min **1**, deseado **1**, max **2**, **dos subredes privadas en AZ distintas**, adjunto al **Target Group** del ALB.
+- Health check del ASG: tipo **ELB** cuando el TG está detrás de un ALB.
 
-**Conectar:** Session Manager o bastión si no hay IP pública.
+### Opción B — Paso a paso en la consola de AWS
+
+#### B.1 Launch Template (plantilla de lanzamiento)
+
+1. Consola **EC2** → menú izquierdo **Launch Templates** → **Create launch template**.
+2. **Launch template name:** por ejemplo `menudigital-api-lt`.
+3. **Template version description:** `v1` (o la que quieras).
+4. **Application and OS Images (AMI):** busca **Amazon Linux 2023** (Kernel 6.1, 64-bit x86).
+5. **Instance type:** `t3.small` (o superior si necesitás más RAM para Docker).
+6. **Key pair:** opcional si vas a usar solo **Systems Manager Session Manager**; si querés SSH clásico, elegí un key pair.
+7. **Network settings** → **Security groups:** elige **`sg-api`** (no hace falta fijar subred aquí; el ASG la elige).
+8. **Storage:** volumen raíz **gp3**, por ejemplo **30 GiB** (Docker + imágenes ocupan espacio).
+9. **Advanced details:**
+   - **IAM instance profile:** rol **API** del paso 6.1 (`menudigital-api-ec2` o el nombre que hayas puesto).
+   - **User data** (texto, **no** base64 en la consola; AWS lo codifica solo): script que instale Docker y Compose, baje/copie `docker-compose.prod.yml`, `.env` y claves JWT (muchas veces el `.env` se genera con **User Data** desde **SSM Parameter Store** o un script que lo pegás aquí). Esquema mínimo:
+
+   ```bash
+   #!/bin/bash
+   set -e
+   dnf update -y
+   dnf install -y docker
+   systemctl enable --now docker
+   usermod -aG docker ec2-user
+   # Instalar plugin compose v2 (según documentación actual AL2023)
+   mkdir -p /opt/menudigital && cd /opt/menudigital
+   # Aquí: aws ecr get-login ... docker compose pull/up, o clonar repo + compose up
+   ```
+
+   Ajustá el user-data a cómo vayas a inyectar **`.env`** (pegado, SSM, etc.); el [Paso 10](#paso-10--archivo-env-y-docker-composeprodyml-en-el-servidor) describe el contenido del `.env`.
+
+10. **Create launch template**.
+
+#### B.2 Auto Scaling Group
+
+1. **EC2** → **Auto Scaling Groups** → **Create Auto Scaling group**.
+2. **Name:** por ejemplo `menudigital-api-asg`.
+3. **Launch template:** seleccioná `menudigital-api-lt` y la **versión** (`Default` o `$Latest`).
+4. **VPC:** tu VPC; **Availability Zones and subnets:** elegí **dos subredes privadas**, una por AZ (las mismas familia donde puede enrutar el ALB hacia instancias privadas).
+5. **Load balancing** (importante):
+   - Elegí **Attach to an existing load balancer**.
+   - **Traffic receiving:** **Application Load Balancer** o **Network Load Balancer** según hayas creado (MenuQR usa **ALB**).
+   - **Choose from your load balancer target groups:** seleccioná el **Target Group** creado en el Paso 11 (puerto 80).
+6. **Health checks:**
+   - Activá **ELB health checks** (así el ASG da de baja instancias que el ALB marca unhealthy).
+   - **Health check grace period:** **180–300** segundos si al arranque hacés `docker pull` y `compose up` (evita marcar unhealthy antes de que nginx responda).
+7. **Group size:**
+   - **Desired capacity:** `1`
+   - **Min:** `1`
+   - **Max:** `2` (o más si definís políticas de escala después).
+8. **Scaling policies** (opcional en el primer despliegue): podés dejar sin políticas dinámicas y escalar a mano cambiando *desired*, o añadir **Target tracking** sobre CPU del ASG.
+9. **Create Auto Scaling group**.
+
+Esperá unos minutos: deberían lanzarse instancias, registrarse en el Target Group y pasar a **healthy** cuando nginx responda en `/q/health` (tras el grace period).
+
+#### B.3 Comprobaciones rápidas
+
+- **EC2** → **Instances:** instancias con nombre/lanzamiento desde el template; sin IP pública si están solo en subred privada.
+- **EC2** → **Target Groups** → tu grupo → pestaña **Targets:** estado **healthy**.
+- Navegador o `curl` al DNS del ALB: `/q/health`.
+
+### Opción B — Equivalente con AWS CLI (referencia)
+
+Sustituí IDs y ARNs por los tuyos (`subnet-xxx`, `lt-xxx`, `arn:aws:elasticloadbalancing:...:targetgroup/...`).
+
+```bash
+# 1) Launch template (versión 1) — el user-data debe ir en base64 en CLI
+#    (generar con: base64 -w0 user-data.sh > user-data.b64 y pegar en --user-data file://...)
+aws ec2 create-launch-template \
+  --launch-template-name menudigital-api-lt \
+  --version-description v1 \
+  --launch-template-data '{
+    "ImageId": "ami-XXXXXXXX",
+    "InstanceType": "t3.small",
+    "SecurityGroupIds": ["sg-api"],
+    "IamInstanceProfile": {"Name": "menudigital-api-ec2-profile"},
+    "UserData": "BASE64_DEL_SCRIPT"
+  }'
+
+# 2) Auto Scaling Group
+aws autoscaling create-auto-scaling-group \
+  --auto-scaling-group-name menudigital-api-asg \
+  --launch-template LaunchTemplateName=menudigital-api-lt,Version='$Latest' \
+  --min-size 1 --max-size 2 --desired-capacity 1 \
+  --vpc-zone-identifier "subnet-AZ1-privada,subnet-AZ2-privada" \
+  --target-group-arns "arn:aws:elasticloadbalancing:REGION:ACCOUNT:targetgroup/menudigital-tg/xxxx" \
+  --health-check-type ELB \
+  --health-check-grace-period 300
+```
+
+Para **AMI ID** de Amazon Linux 2023 en tu región:
+
+```bash
+aws ssm get-parameters --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64 \
+  --query 'Parameters[0].Value' --output text
+```
+
+**Conectar:** Session Manager (**Systems Manager**) si la instancia tiene el agente y rol con `AmazonSSMManagedInstanceCore`, o bastión + SSH.
 
 En la instancia: Docker + Compose ([guía Docker AL2023](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-getting-started-choose-installation.html#serverless-getting-started-install-docker)).
 
@@ -293,6 +398,8 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d
 ---
 
 ## Paso 11 — Application Load Balancer
+
+Si seguís el **ASG** del [Paso 9](#paso-9--lanzar-la-api-una-ec2-o-auto-scaling-group), creá **primero** el **Target Group** (pasos 4–5 abajo), luego el **ASG**, y después completá el **ALB** y el **listener** hacia ese Target Group (o creá TG + ALB y enlazá el ASG al TG cuando exista).
 
 1. **EC2** → **Load Balancers** → **Create** → **Application Load Balancer**.
 2. Esquema **internet-facing**, VPC y **subredes públicas** (dos AZ).

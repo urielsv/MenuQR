@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { AnalyticsDashboard, RealtimeAnalytics } from '../types';
+import type { AnalyticsDashboard, CustomerSegmentsResponse, RealtimeAnalytics } from '../types';
 
 export const analyticsApi = {
   getDashboard: async (): Promise<AnalyticsDashboard> => {
@@ -12,8 +12,8 @@ export const analyticsApi = {
     return response.data;
   },
 
-  getSegments: async (): Promise<any> => {
-    const response = await apiClient.get<any>('/api/v1/analytics/segments?tenantId=550e8400-e29b-41d4-a716-446655440000');
+  getSegments: async (): Promise<CustomerSegmentsResponse> => {
+    const response = await apiClient.get<CustomerSegmentsResponse>('/api/admin/analytics/segments');
     return response.data;
   },
 };

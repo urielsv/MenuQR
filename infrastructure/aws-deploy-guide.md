@@ -298,7 +298,7 @@ El endpoint `POST /api/menu/{slug}/recommendations` está implementado **dentro 
 
 ## 13. Segmentación batch en EC2 (opcional)
 
-El código vive en [ml-segmentation/](./ml-segmentation/). Lee eventos de DynamoDB, calcula segmentos y escribe en `menudigital-segments`.
+El código vive en [ml-segmentation/](./ml-segmentation/). Lee eventos de DynamoDB, calcula segmentos y escribe en `menudigital-segments`. El script **`train_upload_model.py`** sube un artefacto de recomendaciones (joblib) al **bucket de modelos** S3; el rol ETL necesita `s3:PutObject` ahí.
 
 - Ejecutarlo con **cron** en la instancia EC2 (recomendado: misma cuenta IAM que ya tiene acceso a DynamoDB, sin claves en el script).
 - Instrucciones detalladas: [ml-segmentation/README.md](./ml-segmentation/README.md).
