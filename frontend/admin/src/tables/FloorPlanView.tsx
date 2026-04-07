@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { tableApi, type Table, type TablePositionUpdate } from '../shared/api/adminApi';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { Users, Clock, Receipt, Move, Save, RotateCcw } from 'lucide-react';
+import { Users, Move, Save, RotateCcw } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
 
 interface FloorPlanViewProps {

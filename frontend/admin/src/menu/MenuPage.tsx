@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import type { MenuSection, MenuItem } from '@/shared/types';
+import type { MenuItem } from '@/shared/types';
 
 export function MenuPage() {
   const queryClient = useQueryClient();

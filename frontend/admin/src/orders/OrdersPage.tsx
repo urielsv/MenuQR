@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { orderApi, type Order } from '../shared/api/adminApi';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Clock, ChefHat, Check, XCircle, RefreshCw, Receipt } from 'lucide-react';
 import { toast } from '../hooks/use-toast';
