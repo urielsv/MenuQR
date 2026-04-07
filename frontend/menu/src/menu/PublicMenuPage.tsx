@@ -6,7 +6,7 @@ import { DietaryFilterBar } from './DietaryFilterBar';
 import { MenuSectionList } from './MenuSectionList';
 import { getSessionId } from '@/lib/utils';
 import { UtensilsCrossed } from 'lucide-react';
-import type { DietaryTag } from '@/shared/types';
+import type { DietaryTag, MenuSection, MenuItem } from '@/shared/types';
 import { useState } from 'react';
 
 function SkeletonLoader() {
@@ -102,16 +102,16 @@ export function PublicMenuPage() {
     );
   }
 
-  const filteredSections = activeFilters.length === 0
+  const filteredSections: MenuSection[] = activeFilters.length === 0
     ? menu.sections
     : menu.sections
-        .map((section) => ({
+        .map((section: MenuSection) => ({
           ...section,
-          items: section.items.filter((item) =>
+          items: section.items.filter((item: MenuItem) =>
             activeFilters.every((filter) => item.dietaryTags.includes(filter))
           ),
         }))
-        .filter((section) => section.items.length > 0);
+        .filter((section: MenuSection) => section.items.length > 0);
 
   return (
     <div className="min-h-screen bg-background">

@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { menuApi } from '@/shared/api/menuApi';
 import { useToast } from '@/components/Toast';
-import type { OrderResponse, OrderItemResponse } from '@/shared/types';
+import type { OrderResponse } from '@/shared/types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -33,7 +33,6 @@ export function useOrder() {
 }
 
 export function OrderProvider({ children }: { children: ReactNode }) {
-  const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [order, setOrder] = useState<OrderResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -75,7 +74,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       }
     });
     
-    eventSource.addEventListener('connected', (event) => {
+    eventSource.addEventListener('connected', () => {
       console.log('Connected to order updates');
     });
     
@@ -181,8 +180,8 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const addItem = useCallback(async (
     qrToken: string,
     menuItemId: string,
-    name: string,
-    price: string,
+    _name: string,
+    _price: string,
     quantity: number,
     notes?: string,
     guestName?: string,

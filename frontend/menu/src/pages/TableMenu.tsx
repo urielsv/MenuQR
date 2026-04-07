@@ -14,7 +14,7 @@ import { getStoredTableSession, storeTableSession } from '@/lib/utils';
 import type { MenuItem, TableMenuResponse } from '@/shared/types';
 
 function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken: string }) {
-  const { setSession, setOrder, sessionId, addItem, getItemCount, subscribeToUpdates } = useOrder();
+  const { setSession, setOrder, sessionId, addItem, subscribeToUpdates } = useOrder();
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [showCart, setShowCart] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
