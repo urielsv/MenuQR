@@ -19,7 +19,8 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 public class DynamoAnalyticsRepositoryImpl implements AnalyticsRepository {
     
-    private static final String GSI_EVENT_TYPE = "GSI-EventType";
+    /** LSI: misma partición que la tabla (`PK`); sort key alternativo para filtrar por tipo + tiempo. */
+    private static final String LSI_EVENT_TYPE = "LSI-EventType";
     private static final String GSI_ITEM = "GSI-Item";
     
     @Inject
@@ -92,18 +93,19 @@ public class DynamoAnalyticsRepositoryImpl implements AnalyticsRepository {
     
     @Override
     public List<InteractionEvent> findByTenantTypeAndPeriod(String tenantId, EventType eventType, Instant from, Instant to) {
+        String pk = "TENANT#" + tenantId;
         String eventTypeFrom = eventType.name() + "#" + from.toString();
         String eventTypeTo = eventType.name() + "#" + to.toString() + "~";
         
         Map<String, AttributeValue> expressionValues = new HashMap<>();
-        expressionValues.put(":tenantId", AttributeValue.builder().s(tenantId).build());
+        expressionValues.put(":pk", AttributeValue.builder().s(pk).build());
         expressionValues.put(":etFrom", AttributeValue.builder().s(eventTypeFrom).build());
         expressionValues.put(":etTo", AttributeValue.builder().s(eventTypeTo).build());
         
         QueryRequest request = QueryRequest.builder()
             .tableName(tableName)
-            .indexName(GSI_EVENT_TYPE)
-            .keyConditionExpression("tenantId = :tenantId AND eventTypeTimestamp BETWEEN :etFrom AND :etTo")
+            .indexName(LSI_EVENT_TYPE)
+            .keyConditionExpression("PK = :pk AND eventTypeTimestamp BETWEEN :etFrom AND :etTo")
             .expressionAttributeValues(expressionValues)
             .build();
         

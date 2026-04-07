@@ -9,18 +9,24 @@ Billing: PAY_PER_REQUEST (on-demand)
 | PK   | String | TENANT#{tenantId}                |
 | SK   | String | EVENT#{timestamp_iso}#{uuid}     |
 
-### GSIs
-| Index        | PK        | SK                        | Use case                    |
-|--------------|-----------|---------------------------|-----------------------------|
-| GSI-EventType| tenantId  | eventTypeTimestamp        | Filter events by type+time  |
-| GSI-Item     | itemId    | timestamp                 | Per-item view analytics     |
+### LSI (local secondary index)
+| Index          | Partition key | Sort key             | Use case                         |
+|----------------|---------------|----------------------|----------------------------------|
+| LSI-EventType  | `PK` (igual que la tabla) | `eventTypeTimestamp` | Filtrar por tipo de evento + tiempo en un tenant |
+
+**Restricciones LSI:** solo se define **al crear la tabla**. Límite **10 GB** por valor de `PK` entre tabla base y LSIs. Las queries al LSI usan permisos sobre la **tabla base**.
+
+### GSI (global secondary index)
+| Index     | PK       | SK          | Use case            |
+|-----------|----------|-------------|---------------------|
+| GSI-Item  | `itemId` | `timestamp` | Analítica por plato |
 
 ### Item attributes
 - `PK` (String): Partition key
 - `SK` (String): Sort key
-- `tenantId` (String): Restaurant tenant ID
+- `tenantId` (String): Restaurant tenant ID (atributo de datos; queries por tenant usan `PK`)
 - `eventType` (String): MENU_VIEW, ITEM_VIEW, SECTION_VIEW, FILTER_USED
-- `eventTypeTimestamp` (String): "{eventType}#{timestamp}" for GSI
+- `eventTypeTimestamp` (String): "{eventType}#{timestamp}" — sort key del LSI `LSI-EventType`
 - `itemId` (String, optional): Menu item ID for ITEM_VIEW events
 - `sectionId` (String, optional): Menu section ID for SECTION_VIEW events
 - `sessionId` (String): Anonymous session identifier
@@ -52,13 +58,14 @@ KeyConditionExpression: PK = :pk AND SK BETWEEN :from AND :to
 :to = "EVENT#2024-03-16"
 ```
 
-**All ITEM_VIEW events for tenant:**
+**Events of one type for tenant in a time range (LSI):**
 ```
-Index: GSI-EventType
-KeyConditionExpression: tenantId = :tid AND begins_with(eventTypeTimestamp, "ITEM_VIEW#")
+Index: LSI-EventType
+KeyConditionExpression: PK = :pk AND eventTypeTimestamp BETWEEN :etFrom AND :etTo
+:pk = "TENANT#<uuid>"
 ```
 
-**All views for a specific item:**
+**All views for a specific item (GSI):**
 ```
 Index: GSI-Item
 KeyConditionExpression: itemId = :itemId AND timestamp BETWEEN :from AND :to
@@ -66,10 +73,11 @@ KeyConditionExpression: itemId = :itemId AND timestamp BETWEEN :from AND :to
 
 ### Access Patterns
 
-1. **Dashboard analytics**: Query by tenant + time range, aggregate in application
-2. **Realtime stats**: Query last 60 minutes for a tenant
-3. **Item popularity**: Query GSI-Item for specific item view counts
-4. **Filter usage**: Query all FILTER_USED events and group by metadata.filter
+1. **Dashboard analytics**: Query by tenant + time range on base table, aggregate in application
+2. **Realtime stats**: Query last 60 minutes for a tenant (base table)
+3. **By event type + period**: Query `LSI-EventType` with `PK` + `eventTypeTimestamp` range
+4. **Item popularity**: Query `GSI-Item` for specific item view counts
+5. **Filter usage**: Query `FILTER_USED` via LSI or base + filter, group by `metadata.filter`
 
 ### Capacity Planning
 

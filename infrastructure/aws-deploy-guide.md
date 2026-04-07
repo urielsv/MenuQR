@@ -116,14 +116,16 @@ jdbc:postgresql://<rds-endpoint>:5432/menudigital
 
 Crear las tablas según [dynamo-tables.md](./dynamo-tables.md):
 
-- `menudigital-events` (PK/SK + GSI `GSI-EventType`, `GSI-Item`).
+- `menudigital-events` (PK/SK + LSI `LSI-EventType` + GSI `GSI-Item`).
+
+El **LSI** solo se define **al crear** la tabla. Si teníais `GSI-EventType`, hay que **recrear** `menudigital-events` (o nueva tabla + migración) para usar `LSI-EventType`.
 
 Modo de facturación: **PAY_PER_REQUEST** (on-demand) suele bastar al inicio.
 
 **IAM en EC2:** la política debe permitir al menos `dynamodb:PutItem`, `dynamodb:Query`, `dynamodb:GetItem` sobre:
 
 - `arn:aws:dynamodb:<region>:<account>:table/menudigital-events`
-- `arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*`
+- `arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*` (GSI; el LSI usa la tabla base)
 
 En **producción**, no hace falta `DYNAMO_ENDPOINT` ni claves estáticas: el SDK usa **IAM instance profile** si `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` no están definidos para S3/Dynamo (el código ya usa `DefaultCredentialsProvider` cuando faltan claves).
 
