@@ -16,6 +16,7 @@ from collections import defaultdict
 from typing import Any
 
 import boto3
+from botocore.exceptions import ClientError
 import joblib
 import numpy as np
 from sklearn.dummy import DummyClassifier
@@ -24,6 +25,9 @@ dynamodb = boto3.client("dynamodb", region_name=os.environ.get("AWS_REGION", "us
 s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
 
 EVENTS_TABLE = os.environ.get("EVENTS_TABLE", "menudigital-events")
+# Deben coincidir con el KeySchema de la tabla (en el repo Quarkus: PK + SK).
+PK_ATTR = os.environ.get("DYNAMODB_PK_ATTR", "PK")
+SK_ATTR = os.environ.get("DYNAMODB_SK_ATTR", "SK")
 
 
 def get_all_tenants() -> list[str]:
@@ -40,21 +44,36 @@ def query_item_views_for_day(tenant_id: str, date_str: str) -> dict[str, int]:
     end_sk = f"EVENT#{date_str}T23:59:59.999Z"
     counts: dict[str, int] = defaultdict(int)
     paginator = dynamodb.get_paginator("query")
-    for page in paginator.paginate(
-        TableName=EVENTS_TABLE,
-        KeyConditionExpression="PK = :pk AND SK BETWEEN :a AND :b",
-        ExpressionAttributeValues={
-            ":pk": {"S": pk},
-            ":a": {"S": start_sk},
-            ":b": {"S": end_sk},
-        },
-    ):
-        for item in page.get("Items", []):
-            if item.get("eventType", {}).get("S") != "ITEM_VIEW":
-                continue
-            iid = item.get("itemId", {}).get("S")
-            if iid:
-                counts[iid] += 1
+    try:
+        for page in paginator.paginate(
+            TableName=EVENTS_TABLE,
+            KeyConditionExpression="#p = :pk AND #s BETWEEN :a AND :b",
+            ExpressionAttributeNames={"#p": PK_ATTR, "#s": SK_ATTR},
+            ExpressionAttributeValues={
+                ":pk": {"S": pk},
+                ":a": {"S": start_sk},
+                ":b": {"S": end_sk},
+            },
+        ):
+            for item in page.get("Items", []):
+                if item.get("eventType", {}).get("S") != "ITEM_VIEW":
+                    continue
+                iid = item.get("itemId", {}).get("S")
+                if iid:
+                    counts[iid] += 1
+    except ClientError as e:
+        err = e.response.get("Error", {})
+        code = err.get("Code", "")
+        msg = err.get("Message", str(e))
+        print(
+            "ERROR DynamoDB Query. Comprueba región (AWS_REGION), nombre de tabla (EVENTS_TABLE) "
+            f"y que la tabla tenga clave HASH+RANGE con atributos '{PK_ATTR}' y '{SK_ATTR}'.\n"
+            "  aws dynamodb describe-table --table-name "
+            f"{EVENTS_TABLE} --region {os.environ.get('AWS_REGION', 'us-east-1')}\n"
+            f"  ({code}: {msg})",
+            file=sys.stderr,
+        )
+        raise
     return dict(counts)
 
 

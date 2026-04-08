@@ -10,6 +10,4 @@ public interface AnalyticsRepository {
     List<InteractionEvent> findByTenantAndPeriod(String tenantId, Instant from, Instant to);
     
     List<InteractionEvent> findByTenantTypeAndPeriod(String tenantId, EventType eventType, Instant from, Instant to);
-    
-    List<InteractionEvent> findByItemAndPeriod(String itemId, Instant from, Instant to);
 }

@@ -134,19 +134,16 @@ aws dynamodb create-table \
   --attribute-definitions \
     AttributeName=PK,AttributeType=S \
     AttributeName=SK,AttributeType=S \
-    AttributeName=tenantId,AttributeType=S \
     AttributeName=eventTypeTimestamp,AttributeType=S \
-    AttributeName=itemId,AttributeType=S \
-    AttributeName=timestamp,AttributeType=S \
   --key-schema \
     AttributeName=PK,KeyType=HASH \
     AttributeName=SK,KeyType=RANGE \
-  --global-secondary-indexes \
-    '[{"IndexName":"GSI-EventType","KeySchema":[{"AttributeName":"tenantId","KeyType":"HASH"},{"AttributeName":"eventTypeTimestamp","KeyType":"RANGE"}],"Projection":{"ProjectionType":"ALL"}},{"IndexName":"GSI-Item","KeySchema":[{"AttributeName":"itemId","KeyType":"HASH"},{"AttributeName":"timestamp","KeyType":"RANGE"}],"Projection":{"ProjectionType":"ALL"}}]' \
+  --local-secondary-indexes \
+    '[{"IndexName":"LSI-EventType","KeySchema":[{"AttributeName":"PK","KeyType":"HASH"},{"AttributeName":"eventTypeTimestamp","KeyType":"RANGE"}],"Projection":{"ProjectionType":"ALL"}}]' \
   --region "$AWS_REGION"
 ```
 
-Si la tabla ya existe, el comando fallará; en ese caso puedes ignorar el error.
+Si la tabla ya existe, el comando fallará; en ese caso puedes ignorar el error. El **LSI** solo se define al crear la tabla; si tenías GSI antiguos, recrea la tabla para este esquema.
 
 ---
 

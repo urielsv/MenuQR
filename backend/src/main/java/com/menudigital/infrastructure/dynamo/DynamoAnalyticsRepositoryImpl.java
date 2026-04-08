@@ -21,7 +21,6 @@ public class DynamoAnalyticsRepositoryImpl implements AnalyticsRepository {
     
     /** LSI: misma partición que la tabla (`PK`); sort key alternativo para filtrar por tipo + tiempo. */
     private static final String LSI_EVENT_TYPE = "LSI-EventType";
-    private static final String GSI_ITEM = "GSI-Item";
     
     @Inject
     DynamoDbClient dynamoDbClient;
@@ -106,27 +105,6 @@ public class DynamoAnalyticsRepositoryImpl implements AnalyticsRepository {
             .tableName(tableName)
             .indexName(LSI_EVENT_TYPE)
             .keyConditionExpression("PK = :pk AND eventTypeTimestamp BETWEEN :etFrom AND :etTo")
-            .expressionAttributeValues(expressionValues)
-            .build();
-        
-        QueryResponse response = dynamoDbClient.query(request);
-        return response.items().stream()
-            .map(this::toInteractionEvent)
-            .toList();
-    }
-    
-    @Override
-    public List<InteractionEvent> findByItemAndPeriod(String itemId, Instant from, Instant to) {
-        Map<String, AttributeValue> expressionValues = new HashMap<>();
-        expressionValues.put(":itemId", AttributeValue.builder().s(itemId).build());
-        expressionValues.put(":from", AttributeValue.builder().s(from.toString()).build());
-        expressionValues.put(":to", AttributeValue.builder().s(to.toString() + "~").build());
-        
-        QueryRequest request = QueryRequest.builder()
-            .tableName(tableName)
-            .indexName(GSI_ITEM)
-            .keyConditionExpression("itemId = :itemId AND #ts BETWEEN :from AND :to")
-            .expressionAttributeNames(Map.of("#ts", "timestamp"))
             .expressionAttributeValues(expressionValues)
             .build();
         

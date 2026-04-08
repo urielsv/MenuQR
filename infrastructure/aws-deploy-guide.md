@@ -116,16 +116,15 @@ jdbc:postgresql://<rds-endpoint>:5432/menudigital
 
 Crear las tablas según [dynamo-tables.md](./dynamo-tables.md):
 
-- `menudigital-events` (PK/SK + LSI `LSI-EventType` + GSI `GSI-Item`).
+- `menudigital-events` (PK/SK + LSI `LSI-EventType`; sin GSI).
 
-El **LSI** solo se define **al crear** la tabla. Si teníais `GSI-EventType`, hay que **recrear** `menudigital-events` (o nueva tabla + migración) para usar `LSI-EventType`.
+El **LSI** solo se define **al crear** la tabla. Si teníais `GSI-EventType` o `GSI-Item`, hay que **recrear** `menudigital-events` (o nueva tabla + migración) para alinear el esquema.
 
 Modo de facturación: **PAY_PER_REQUEST** (on-demand) suele bastar al inicio.
 
 **IAM en EC2:** la política debe permitir al menos `dynamodb:PutItem`, `dynamodb:Query`, `dynamodb:GetItem` sobre:
 
-- `arn:aws:dynamodb:<region>:<account>:table/menudigital-events`
-- `arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*` (GSI; el LSI usa la tabla base)
+- `arn:aws:dynamodb:<region>:<account>:table/menudigital-events` (incluye queries al LSI; no hay GSI en esta tabla)
 
 En **producción**, no hace falta `DYNAMO_ENDPOINT` ni claves estáticas: el SDK usa **IAM instance profile** si `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` no están definidos para S3/Dynamo (el código ya usa `DefaultCredentialsProvider` cuando faltan claves).
 
@@ -187,10 +186,7 @@ Incluye imágenes, DynamoDB y **lectura** del modelo:
     {
       "Effect": "Allow",
       "Action": ["dynamodb:PutItem", "dynamodb:Query", "dynamodb:GetItem"],
-      "Resource": [
-        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events",
-        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*"
-      ]
+      "Resource": "arn:aws:dynamodb:<region>:<account>:table/menudigital-events"
     }
   ]
 }
@@ -214,10 +210,7 @@ Lectura de eventos en DynamoDB y **escritura** de modelos en S3:
     {
       "Effect": "Allow",
       "Action": ["dynamodb:Query", "dynamodb:Scan", "dynamodb:GetItem", "dynamodb:PutItem"],
-      "Resource": [
-        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events",
-        "arn:aws:dynamodb:<region>:<account>:table/menudigital-events/index/*"
-      ]
+      "Resource": "arn:aws:dynamodb:<region>:<account>:table/menudigital-events"
     }
   ]
 }

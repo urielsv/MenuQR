@@ -16,6 +16,7 @@ El script **`train_upload_model.py`** lee eventos `ITEM_VIEW` en DynamoDB (`menu
 | `RECOMMENDATIONS_MODEL_S3_BUCKET` | Bucket de modelos |
 | `RECOMMENDATIONS_MODEL_S3_KEY` | Clave del objeto (ej. `recommendations/v1/model.joblib`) |
 | `TENANT_IDS` | Opcional: lista separada por comas; si falta, usa un tenant de demo |
+| `DYNAMODB_PK_ATTR` / `DYNAMODB_SK_ATTR` | Opcional: nombres de la clave HASH y RANGE en la tabla (por defecto `PK` y `SK`) |
 
 ## Uso local o en EC2
 
@@ -36,6 +37,8 @@ python3 train_upload_model.py
 ```cron
 15 4 * * * cd /opt/menudigital/ml-segmentation && . .venv/bin/activate && AWS_REGION=us-east-1 EVENTS_TABLE=menudigital-events RECOMMENDATIONS_MODEL_S3_BUCKET=... RECOMMENDATIONS_MODEL_S3_KEY=... python3 train_upload_model.py >> /var/log/menudigital-model.log 2>&1
 ```
+
+Guía paso a paso (SSH, dependencias, prueba, cron diario): [GUIA-EC2-CRON.md](./GUIA-EC2-CRON.md).
 
 ## Notas
 
