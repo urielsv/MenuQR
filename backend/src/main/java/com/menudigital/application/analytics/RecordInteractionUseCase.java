@@ -6,6 +6,7 @@ import com.menudigital.domain.analytics.InteractionEvent;
 import com.menudigital.domain.tenant.RestaurantRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import io.quarkus.logging.Log;
 
 @ApplicationScoped
 public class RecordInteractionUseCase {
@@ -29,7 +30,12 @@ public class RecordInteractionUseCase {
             command.metadata()
         );
         
+        Log.debugf("Saving event to DynamoDB - tenantId: %s, eventType: %s, eventId: %s", 
+            restaurant.getId(), command.eventType(), event.id());
+        
         analyticsRepository.save(event);
+        
+        Log.debugf("Event saved successfully - eventId: %s", event.id());
     }
     
     public static class RestaurantNotFoundException extends RuntimeException {

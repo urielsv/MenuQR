@@ -3,6 +3,7 @@ package com.menudigital.infrastructure.dynamo;
 import com.menudigital.domain.analytics.AnalyticsRepository;
 import com.menudigital.domain.analytics.EventType;
 import com.menudigital.domain.analytics.InteractionEvent;
+import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -64,7 +65,14 @@ public class DynamoAnalyticsRepositoryImpl implements AnalyticsRepository {
             .item(item)
             .build();
         
-        dynamoDbClient.putItem(request);
+        try {
+            Log.debugf("Writing event to DynamoDB table '%s' - PK: %s, SK: %s", tableName, pk, sk);
+            dynamoDbClient.putItem(request);
+            Log.debugf("Event written successfully to DynamoDB");
+        } catch (Exception e) {
+            Log.errorf("Failed to write event to DynamoDB table '%s': %s", tableName, e.getMessage(), e);
+            throw e;
+        }
     }
     
     @Override
@@ -84,10 +92,17 @@ public class DynamoAnalyticsRepositoryImpl implements AnalyticsRepository {
             .expressionAttributeValues(expressionValues)
             .build();
         
-        QueryResponse response = dynamoDbClient.query(request);
-        return response.items().stream()
-            .map(this::toInteractionEvent)
-            .toList();
+        try {
+            Log.debugf("Querying DynamoDB for tenant %s from %s to %s", tenantId, from, to);
+            QueryResponse response = dynamoDbClient.query(request);
+            Log.debugf("Query returned %d items", response.items().size());
+            return response.items().stream()
+                .map(this::toInteractionEvent)
+                .toList();
+        } catch (Exception e) {
+            Log.errorf("Failed to query events from DynamoDB: %s", e.getMessage(), e);
+            throw e;
+        }
     }
     
     @Override
@@ -108,10 +123,17 @@ public class DynamoAnalyticsRepositoryImpl implements AnalyticsRepository {
             .expressionAttributeValues(expressionValues)
             .build();
         
-        QueryResponse response = dynamoDbClient.query(request);
-        return response.items().stream()
-            .map(this::toInteractionEvent)
-            .toList();
+        try {
+            Log.debugf("Querying DynamoDB LSI for tenant %s, eventType %s from %s to %s", tenantId, eventType, from, to);
+            QueryResponse response = dynamoDbClient.query(request);
+            Log.debugf("Query returned %d items", response.items().size());
+            return response.items().stream()
+                .map(this::toInteractionEvent)
+                .toList();
+        } catch (Exception e) {
+            Log.errorf("Failed to query events from DynamoDB LSI: %s", e.getMessage(), e);
+            throw e;
+        }
     }
     
     private InteractionEvent toInteractionEvent(Map<String, AttributeValue> item) {
