@@ -23,10 +23,10 @@ public class S3ClientFactory {
     @ConfigProperty(name = "aws.s3.endpoint-override")
     Optional<String> endpointOverride;
 
-    @ConfigProperty(name = "aws.dynamodb.access-key", defaultValue = "local")
+    @ConfigProperty(name = "aws.s3.access-key", defaultValue = "local")
     String accessKey;
 
-    @ConfigProperty(name = "aws.dynamodb.secret-key", defaultValue = "local")
+    @ConfigProperty(name = "aws.s3.secret-key", defaultValue = "local")
     String secretKey;
 
     public S3Client createClient() {

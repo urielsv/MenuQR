@@ -21,8 +21,7 @@ services:
       QUARKUS_PROFILE: ${QUARKUS_PROFILE:-prod}
       RECOMMENDATIONS_MODEL_S3_BUCKET: ${RECOMMENDATIONS_MODEL_S3_BUCKET:-}
       RECOMMENDATIONS_MODEL_S3_KEY: ${RECOMMENDATIONS_MODEL_S3_KEY:-}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      # Sin claves estáticas: S3 y Dynamo usan el rol IAM de la instancia. Si inyectás vacío, Quarkus falla al arrancar.
     volumes:
       - ./privateKey.pem:/work/privateKey.pem:ro
       - ./publicKey.pem:/work/publicKey.pem:ro
