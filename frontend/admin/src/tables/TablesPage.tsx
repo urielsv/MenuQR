@@ -33,7 +33,7 @@ export function TablesPage() {
       queryClient.invalidateQueries({ queryKey: ['tables'] });
       setShowAddDialog(false);
       setQrTable(newTable);
-      toast({ title: 'Table Created', description: `Table ${newTable.number} has been created`, variant: 'success' });
+      toast({ title: 'Table Created', description: `Table ${newTable.tableNumber} has been created`, variant: 'success' });
     },
     onError: () => toast({ title: 'Error', description: 'Failed to create table', variant: 'destructive' }),
   });
@@ -69,8 +69,13 @@ export function TablesPage() {
   });
 
   const sessionMutation = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: 'create' | 'end' }) =>
-      action === 'create' ? tableApi.createSession(id) : tableApi.endSession(id),
+    mutationFn: async ({ id, action }: { id: string; action: 'create' | 'end' }): Promise<void> => {
+      if (action === 'create') {
+        await tableApi.createSession(id);
+      } else {
+        await tableApi.endSession(id);
+      }
+    },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tables'] });
       toast({ 

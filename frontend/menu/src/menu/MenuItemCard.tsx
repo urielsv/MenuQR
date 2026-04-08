@@ -83,17 +83,20 @@ export function MenuItemCard({ item, slug }: MenuItemCardProps) {
         )}
         {item.dietaryTags.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {item.dietaryTags.map((tag) => (
-              <span
-                key={tag}
-                className={cn(
-                  'px-2 py-0.5 rounded-full text-xs font-medium',
-                  tagColors[tag]
-                )}
-              >
-                {tagLabels[tag]}
-              </span>
-            ))}
+            {item.dietaryTags.map((tag) => {
+              const dietaryTag = tag as DietaryTag;
+              return (
+                <span
+                  key={tag}
+                  className={cn(
+                    'px-2 py-0.5 rounded-full text-xs font-medium',
+                    tagColors[dietaryTag]
+                  )}
+                >
+                  {tagLabels[dietaryTag]}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>

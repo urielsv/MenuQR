@@ -3,10 +3,22 @@ import type {
   TableMenuResponse, 
   JoinResponse, 
   OrderResponse, 
-  RecordEventRequest 
+  RecordEventRequest,
+  MenuSection,
 } from '../types';
 
+export interface PublicMenuResponse {
+  restaurantName: string;
+  slug: string;
+  sections: MenuSection[];
+}
+
 export const menuApi = {
+  getMenu: async (slug: string): Promise<PublicMenuResponse> => {
+    const response = await apiClient.get<PublicMenuResponse>(`/api/menu/${slug}`);
+    return response.data;
+  },
+
   getTableMenu: async (qrToken: string): Promise<TableMenuResponse> => {
     const response = await apiClient.get<TableMenuResponse>(`/api/table/${qrToken}`);
     return response.data;
