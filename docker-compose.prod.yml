@@ -1,6 +1,11 @@
 services:
   backend:
+    build:
+      context: ./backend
+      dockerfile: src/main/docker/Dockerfile.jvm
     image: menudigital-backend:latest
+    # Evita pull a Docker Hub: la imagen es local o se construye con --build
+    pull_policy: never
     ports:
       - "8080:8080"
     environment:
