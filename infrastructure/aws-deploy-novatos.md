@@ -255,21 +255,25 @@ Así las nuevas instancias del ASG se registran solas en el TG y el balanceador 
 8. **Storage:** volumen raíz **gp3**, por ejemplo **30 GiB** (Docker + imágenes ocupan espacio).
 9. **Advanced details:**
    - **IAM instance profile:** rol **API** del paso 6.1 (`menudigital-api-ec2` o el nombre que hayas puesto).
-   - **User data** (texto, **no** base64 en la consola; AWS lo codifica solo): script que instale Docker y Compose, baje/copie `docker-compose.prod.yml`, `.env` y claves JWT (muchas veces el `.env` se genera con **User Data** desde **SSM Parameter Store** o un script que lo pegás aquí). Esquema mínimo:
+   - **User data** (texto, **no** base64 en la consola; AWS lo codifica solo). Dos enfoques:
+     - **Con ECR:** instalar Docker + Compose, `aws ecr get-login-password | docker login ...`, `docker compose pull && docker compose up -d` (y copiar `.env` + JWT desde S3 o SSM).
+     - **Sin ECR:** instalar Docker + Compose + Git, **clonar el repo**, `docker build` del backend en la instancia (el `Dockerfile.jvm` ya ejecuta Maven dentro de la build) y `docker compose up -d`. Ejemplo completo en el repo: [`launch-template/user-data-al2023-build-no-ecr.sh`](./launch-template/user-data-al2023-build-no-ecr.sh). Subí el **health check grace period** del ASG a **600–900 s** porque el primer arranque es lento.
+
+   Esquema mínimo (solo idea; preferí el script del repo si no usás ECR):
 
    ```bash
    #!/bin/bash
    set -e
-   dnf update -y
-   dnf install -y docker
+   yum update -y
+   yum install -y docker git
    systemctl enable --now docker
-   usermod -aG docker ec2-user
-   # Instalar plugin compose v2 (según documentación actual AL2023)
+   yum install -y docker-compose-plugin || true  # en AL2 a veces falta; ver script completo en launch-template/
    mkdir -p /opt/menudigital && cd /opt/menudigital
-   # Aquí: aws ecr get-login ... docker compose pull/up, o clonar repo + compose up
+   # Con ECR: login + docker compose pull/up
+   # Sin ECR: git clone ... && docker build ... && docker compose up -d
    ```
 
-   Ajustá el user-data a cómo vayas a inyectar **`.env`** (pegado, SSM, etc.); el [Paso 10](#paso-10--archivo-env-y-docker-composeprodyml-en-el-servidor) describe el contenido del `.env`.
+   Ajustá el user-data a cómo vayas a inyectar **`.env`** (S3, SSM, etc.); el [Paso 10](#paso-10--archivo-env-y-docker-composeprodyml-en-el-servidor) describe el contenido del `.env`.
 
 10. **Create launch template**.
 
@@ -285,7 +289,7 @@ Así las nuevas instancias del ASG se registran solas en el TG y el balanceador 
    - **Choose from your load balancer target groups:** seleccioná el **Target Group** creado en el Paso 11 (puerto 80).
 6. **Health checks:**
    - Activá **ELB health checks** (así el ASG da de baja instancias que el ALB marca unhealthy).
-   - **Health check grace period:** **180–300** segundos si al arranque hacés `docker pull` y `compose up` (evita marcar unhealthy antes de que nginx responda).
+   - **Health check grace period:** **180–300** s si solo hacés `docker pull` + `compose up` con imagen ya en ECR; **600–900** s (o más) si en el user-data **construís la imagen en la instancia** sin ECR (ver script en `infrastructure/launch-template/`).
 7. **Group size:**
    - **Desired capacity:** `1`
    - **Min:** `1`

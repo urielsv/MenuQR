@@ -222,6 +222,8 @@ Ajustad ARNs y KMS si usáis cifrado en bucket.
 
 ## 9. Imagen del backend, ECR y Auto Scaling Group
 
+### 9.1 Flujo recomendado: build local o CI + ECR
+
 En un entorno de build (CI o máquina local):
 
 ```bash
@@ -230,7 +232,23 @@ mvn -DskipTests package
 docker build -f src/main/docker/Dockerfile.jvm -t menudigital-backend:latest .
 ```
 
-Subir la imagen a **Amazon ECR** y en cada EC2 hacer `docker pull` de ese tag, o construir en la instancia si aceptáis el tiempo de build.
+Subir la imagen a **Amazon ECR** y en cada EC2 hacer `docker pull` de ese tag.
+
+### 9.2 Sin ECR: build en la instancia vía user-data (Launch Template)
+
+Si **no** usás ECR, podés poner en el **user data** de la plantilla un script que:
+
+1. Instale **Docker** y **Compose v2** (Amazon Linux: `yum install -y docker git`; el plugin `docker-compose-plugin` si está en repos, o binario desde GitHub en AL2 — ver script en `launch-template/`).
+2. Clone el repo (**Git**; repo privado: token vía **SSM Parameter Store** o deploy key, no hardcodear en claro).
+3. Secretos: el user-data escribe `.env` desde la sección **CONFIG** del script (completá variables ahí). Genera `privateKey.pem` / `publicKey.pem` si no existen; en producción podés reemplazarlas por claves propias y reiniciar el contenedor del backend.
+4. Ejecute `docker build -f backend/src/main/docker/Dockerfile.jvm -t menudigital-backend:latest backend/` (el **Maven** corre **dentro** del `Dockerfile.jvm`, no hace falta instalar Maven en el host).
+5. Levante `docker compose -f docker-compose.prod.yml up -d`.
+
+En el repo hay un ejemplo listo para adaptar: [`infrastructure/launch-template/user-data-al2023-build-no-ecr.sh`](./launch-template/user-data-al2023-build-no-ecr.sh).
+
+**Implicaciones:** el **primer arranque** de cada instancia nueva es **lento** (descarga de capas base + compilación Quarkus). En el **ASG** subí el **health check grace period** a **600–900 s** (o más en `t3.small`). Cada **nueva** instancia repetirá el build salvo que uses una **AMI golden** generada con Packer u otra herramienta.
+
+**IAM sin ECR:** no hace falta `ecr:*` para este flujo; sí **S3** si copiás secretos, y permisos de **SSM** si leés parámetros.
 
 **Contenido mínimo en el servidor** (junto al compose):
 
