@@ -48,17 +48,13 @@ export function MenuSectionList({ sections, slug }: MenuSectionListProps) {
 
   return (
     <div className="space-y-8">
-      {sections
-        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
-        .map((section) => (
+      {sections.map((section) => (
           <section key={section.id} data-section-id={section.id}>
             <h2 className="text-xl font-semibold mb-4 text-foreground sticky top-0 bg-background py-2 z-10">
               {section.name}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {section.items
-                .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
-                .map((item) => (
+              {section.items.map((item) => (
                   <MenuItemCard key={item.id} item={item} slug={slug} />
                 ))}
             </div>

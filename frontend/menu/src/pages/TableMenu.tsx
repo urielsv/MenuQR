@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { menuApi } from '@/shared/api/menuApi';
@@ -15,6 +15,8 @@ import type { MenuItem, TableMenuResponse } from '@/shared/types';
 
 function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken: string }) {
   const { setSession, setOrder, sessionId, addItem, subscribeToUpdates } = useOrder();
+  // Evita duplicar MENU_VIEW por re-renders.
+  const menuViewSentRef = useRef(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [showCart, setShowCart] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -54,6 +56,19 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
       setActiveSection(data.sections[0].id);
     }
   }, [data.sections, activeSection]);
+
+  useEffect(() => {
+    if (!sessionId || menuViewSentRef.current) return;
+
+    menuViewSentRef.current = true;
+    menuApi.recordEvent(data.slug, {
+      eventType: 'MENU_VIEW',
+      sessionId,
+      metadata: { source: 'TABLE_QR' },
+    }).catch(() => {
+      // Analytics no debe bloquear el flujo de pedido.
+    });
+  }, [data.slug, sessionId]);
 
   const filteredSections = useMemo(() => {
     if (!searchQuery) return data.sections;
