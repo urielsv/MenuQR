@@ -106,7 +106,8 @@ export function TablesPage() {
   };
 
   const getTableUrl = (table: Table) => {
-    const menuOrigin = window.location.origin.replace(':5174', ':5173');
+    const menuOrigin = (import.meta.env.VITE_MENU_URL as string | undefined)?.replace(/\/$/, '')
+      ?? window.location.origin.replace(':5174', ':5173');
     return `${menuOrigin}/table/${table.qrCodeToken}`;
   };
 

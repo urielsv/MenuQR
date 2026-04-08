@@ -180,7 +180,7 @@ export function MenuItemForm({ open, onClose, item, sections, defaultSectionId }
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{item ? 'Edit Item' : 'Add Item'}</DialogTitle>
         </DialogHeader>
@@ -325,18 +325,6 @@ export function MenuItemForm({ open, onClose, item, sections, defaultSectionId }
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="displayOrder">Display Order</Label>
-            <Input
-              id="displayOrder"
-              type="number"
-              min="0"
-              value={formData.displayOrder}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))
-              }
-            />
-          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
