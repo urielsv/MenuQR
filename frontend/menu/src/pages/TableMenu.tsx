@@ -22,6 +22,8 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+  const [isCategoryFilterEnabled, setIsCategoryFilterEnabled] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
   const joinMutation = useMutation({
     mutationFn: async () => {
@@ -58,6 +60,14 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
   }, [data.sections, activeSection]);
 
   useEffect(() => {
+    if (!selectedCategoryId) return;
+    const exists = data.sections.some((section) => section.id === selectedCategoryId);
+    if (!exists) {
+      setSelectedCategoryId(null);
+    }
+  }, [data.sections, selectedCategoryId]);
+
+  useEffect(() => {
     if (!sessionId || menuViewSentRef.current) return;
 
     menuViewSentRef.current = true;
@@ -71,16 +81,26 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
   }, [data.slug, sessionId]);
 
   const filteredSections = useMemo(() => {
-    if (!searchQuery) return data.sections;
-    
-    return data.sections.map(section => ({
-      ...section,
-      items: section.items.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    })).filter(section => section.items.length > 0);
-  }, [data.sections, searchQuery]);
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    const searchFiltered = !normalizedQuery
+      ? data.sections
+      : data.sections
+          .map((section) => ({
+            ...section,
+            items: section.items.filter((item) =>
+              item.name.toLowerCase().includes(normalizedQuery) ||
+              item.description?.toLowerCase().includes(normalizedQuery)
+            ),
+          }))
+          .filter((section) => section.items.length > 0);
+
+    if (!isCategoryFilterEnabled || !selectedCategoryId) {
+      return searchFiltered;
+    }
+
+    return searchFiltered.filter((section) => section.id === selectedCategoryId);
+  }, [data.sections, isCategoryFilterEnabled, searchQuery, selectedCategoryId]);
 
   const handleItemClick = (itemId: string) => {
     const item = data.sections
@@ -110,6 +130,14 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
       const offsetPosition = elementPosition - headerHeight - 10;
       window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
     }
+  };
+
+  const handleCategoryAction = (sectionId: string) => {
+    if (isCategoryFilterEnabled) {
+      setSelectedCategoryId((prev) => (prev === sectionId ? null : sectionId));
+      return;
+    }
+    scrollToSection(sectionId);
   };
 
   if (isJoining || joinMutation.isPending) {
@@ -203,6 +231,20 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
               }}
             />
           </div>
+          <label className="mt-3 inline-flex items-center gap-2 text-xs" style={{ color: `${data.theme.textColor}80` }}>
+            <input
+              type="checkbox"
+              checked={isCategoryFilterEnabled}
+              onChange={(e) => {
+                setIsCategoryFilterEnabled(e.target.checked);
+                if (!e.target.checked) {
+                  setSelectedCategoryId(null);
+                }
+              }}
+              className="h-4 w-4"
+            />
+            Filter by category
+          </label>
         </div>
 
         {/* Category Tabs */}
@@ -212,11 +254,17 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
               {filteredSections.map((section) => (
                 <button
                   key={section.id}
-                  onClick={() => scrollToSection(section.id)}
+                  onClick={() => handleCategoryAction(section.id)}
                   className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all"
                   style={{ 
-                    backgroundColor: activeSection === section.id ? data.theme.primaryColor : `${data.theme.textColor}08`,
-                    color: activeSection === section.id ? '#fff' : `${data.theme.textColor}80`,
+                    backgroundColor:
+                      (isCategoryFilterEnabled ? selectedCategoryId === section.id : activeSection === section.id)
+                        ? data.theme.primaryColor
+                        : `${data.theme.textColor}08`,
+                    color:
+                      (isCategoryFilterEnabled ? selectedCategoryId === section.id : activeSection === section.id)
+                        ? '#fff'
+                        : `${data.theme.textColor}80`,
                   }}
                 >
                   {section.name}
@@ -252,14 +300,17 @@ function TableMenuContent({ data, qrToken }: { data: TableMenuResponse; qrToken:
               Try searching for something else
             </p>
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCategoryId(null);
+              }}
               className="mt-4 rounded-full px-6 py-2 text-sm font-medium"
               style={{ 
                 backgroundColor: data.theme.primaryColor,
                 color: '#fff',
               }}
             >
-              Clear search
+              Clear filters
             </button>
           </div>
         ) : (
