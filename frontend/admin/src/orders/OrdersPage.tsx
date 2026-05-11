@@ -15,6 +15,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: typeof 
   READY: { label: 'Ready', color: 'bg-green-500', icon: Check },
   DELIVERED: { label: 'Delivered', color: 'bg-gray-400', icon: Check },
   BILL_REQUESTED: { label: 'Bill Requested', color: 'bg-orange-500', icon: Receipt },
+  PAID: { label: 'Paid', color: 'bg-green-700', icon: Check },
   CANCELLED: { label: 'Cancelled', color: 'bg-red-500', icon: XCircle },
 };
 
@@ -76,6 +77,15 @@ export function OrdersPage() {
     onError: () => toast({ title: 'Error', description: 'Failed to update order', variant: 'destructive' }),
   });
 
+  const paidMutation = useMutation({
+    mutationFn: orderApi.markPaid,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({ title: 'Order Paid', description: `Order #${data.orderNumber} has been marked as paid`, variant: 'success' });
+    },
+    onError: () => toast({ title: 'Error', description: 'Failed to mark order as paid', variant: 'destructive' }),
+  });
+
   const cancelMutation = useMutation({
     mutationFn: orderApi.cancel,
     onSuccess: (data) => {
@@ -95,6 +105,8 @@ export function OrdersPage() {
         return { label: 'Mark Ready', action: () => readyMutation.mutate(order.id), variant: 'default' as const };
       case 'READY':
         return { label: 'Delivered', action: () => deliveredMutation.mutate(order.id), variant: 'default' as const };
+      case 'BILL_REQUESTED':
+        return { label: 'Mark as Paid', action: () => paidMutation.mutate(order.id), variant: 'default' as const };
       default:
         return null;
     }

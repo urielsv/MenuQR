@@ -105,11 +105,12 @@ public class OrderRepositoryImpl implements OrderRepository {
     @Override
     public List<Order> findActiveByTenantId(TenantId tenantId) {
         List<OrderEntity> entities = em.createQuery(
-            "SELECT o FROM OrderEntity o WHERE o.restaurantId = :rid AND o.status NOT IN (:delivered, :cancelled) ORDER BY o.createdAt DESC", 
+            "SELECT o FROM OrderEntity o WHERE o.restaurantId = :rid AND o.status NOT IN (:delivered, :cancelled, :paid) ORDER BY o.createdAt DESC",
             OrderEntity.class)
             .setParameter("rid", tenantId.value())
             .setParameter("delivered", OrderStatus.DELIVERED)
             .setParameter("cancelled", OrderStatus.CANCELLED)
+            .setParameter("paid", OrderStatus.PAID)
             .getResultList();
         
         return entities.stream()

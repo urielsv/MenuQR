@@ -157,6 +157,28 @@ public class OrderAdminResource {
     }
     
     @POST
+    @Path("/{id}/paid")
+    @Transactional
+    @Operation(summary = "Mark order as paid")
+    public Response markPaid(@PathParam("id") UUID id) {
+        return orderRepository.findById(id)
+            .filter(o -> o.getTenantId().equals(tenantContext.getTenantId()))
+            .map(order -> {
+                try {
+                    order.markPaid();
+                    orderRepository.update(order);
+                    broadcastOrderUpdate(order);
+                    return Response.ok(toResponse(order)).build();
+                } catch (IllegalStateException e) {
+                    return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(new ErrorResponse("INVALID_STATE", e.getMessage()))
+                        .build();
+                }
+            })
+            .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+
+    @POST
     @Path("/{id}/cancel")
     @Transactional
     @Operation(summary = "Cancel an order")

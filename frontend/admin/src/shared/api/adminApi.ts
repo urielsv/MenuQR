@@ -175,6 +175,11 @@ export const orderApi = {
     return response.data;
   },
 
+  markPaid: async (id: string): Promise<Order> => {
+    const response = await apiClient.post<Order>(`/api/admin/orders/${id}/paid`);
+    return response.data;
+  },
+
   cancel: async (id: string): Promise<Order> => {
     const response = await apiClient.post<Order>(`/api/admin/orders/${id}/cancel`);
     return response.data;

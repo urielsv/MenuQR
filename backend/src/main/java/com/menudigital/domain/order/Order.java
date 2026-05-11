@@ -164,6 +164,14 @@ public class Order {
         this.updatedAt = Instant.now();
     }
     
+    public void markPaid() {
+        if (this.status != OrderStatus.BILL_REQUESTED) {
+            throw new IllegalStateException("Only bill-requested orders can be marked as paid");
+        }
+        this.status = OrderStatus.PAID;
+        this.updatedAt = Instant.now();
+    }
+
     public void cancel() {
         if (this.status == OrderStatus.DELIVERED || this.status == OrderStatus.CANCELLED) {
             throw new IllegalStateException("Cannot cancel delivered or already cancelled orders");

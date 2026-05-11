@@ -8,5 +8,6 @@ public enum OrderStatus {
     READY,
     DELIVERED,
     BILL_REQUESTED,
+    PAID,
     CANCELLED
 }
